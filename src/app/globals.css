@@ -1,26 +1,41 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* background-image: linear-gradient(
+    to left top,
+    #5de7ff,
+    #85e7ff,
+    #a6e8ff,
+    #c1e8ff,
+    #d6eaff
+  ); */
+  background-color: #D6EAFF;
+  height: 100vh;
+  overflow: hidden;
+  font-family: 'Inter';
+}
+
+.heading_title>h1 {
+    line-height: 70px;
+    margin-bottom: 30px;
+    text-shadow: 0 10px 8 rgba(0,0,0,.25);
+}
+
+.heading_title>h2 {
+    line-height:50px;
+    text-shadow: 0 10px 8 rgba(0,0,0,.25);
+
+}
+
+.main_input_con {
+  backdrop-filter: blur(5);
+  box-shadow: 0 4px 20px 0px rgba(0,0,0,.25);
+}
+
+.submit_button {
+  box-shadow: 0 0 10 0 rgba(0,0,0,.25);
 }
