@@ -4,12 +4,12 @@ import { CircleUserRound, Menu } from "lucide-react";
 
 export default function Home() {
   return (
-    <div className="overflow-hidden">
-      <div className="flex flex-col justify-center pt-[18px] items-center   relative">
-        <div className="absolute flex justify-center top-[-18px] w-full overflow-hidden">
+    <div className="">
+      <div className="flex flex-col justify-center pt-[18px] items-center  pb-[30px] relative">
+        <div className="absolute flex justify-center top-[-18px] h-full w-full overflow-hidden">
           <div className="  min-w-[760px] z-0">
-          <Image src={bgCircles} width={760} height={2000} className=" " />
-        </div>
+            <Image src={bgCircles} width={760} height={2000} className=" " />
+          </div>
         </div>
 
         <div className="mainCon z-10 flex flex-col px-[20px] items-center w-full min-w-[308px] max-w-[500px] pt-[15px] h-[100vh]">
