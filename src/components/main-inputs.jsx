@@ -2,7 +2,7 @@ import React from 'react'
 
 const MainInputs = () => {
   return (
-    <div className="main_input_con py-[22px] px-[20px] mt-[40px] w-full bg-[#fafafa3a] rounded-[15px]">
+    <div className="main_input_con py-[22px] px-[20px] mt-[30px] w-full bg-[#fafafa3a] rounded-[15px]">
             <div className=" text-[#414141]">
               <h1 className="font-extrabold text-[24px]">
                 Countries and Years
