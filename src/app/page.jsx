@@ -128,14 +128,14 @@ export default function Home() {
           </div> */}
           <div className="text-[#414141] heading_buttons w-full flex justify-between  ">
             <a href="https://www.instagram.com/g.zhann/" target="blank" className="bg-[#ffffff76] rounded-[10px] p-[5px]">
-              <InstagramIcon size={28}/>
+              <InstagramIcon size={32}/>
             </a>
             <a href="https://www.tiktok.com/@g.zhann1" target="blank" className="bg-[#ffffff76] rounded-[10px] p-[5px] ">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="#414141"
-                width="28px"
-                height="28px"
+                width="32px"
+                height="32px"
                 viewBox="0 0 32 32"
                 version="1.1"
               >
