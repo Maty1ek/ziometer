@@ -3,19 +3,19 @@ import Image from "next/image";
 import bgCircles from "../../public/bg_circles.svg";
 import { CircleUserRound, Menu, XIcon } from "lucide-react";
 import MainInputs from "@/components/main-inputs";
-import BuyModal from "@/components/BuyModal";
+// import BuyModal from "@/components/BuyModal";
 import { useState, useEffect } from "react";
 import { submitToGrok } from "@/app/actions/submitToGrok";
 import { createClient } from "@supabase/supabase-js";
-import AuthModal from "@/components/AuthModal";
-import { supabaseClient } from "@/lib/supabaseClient";
-import { getUserTokens, addTokens } from "@/lib/supabaseServer"; // Wait, addTokens is server, but get is ok client if RLS allows
+// import AuthModal from "@/components/AuthModal";
+// import { supabaseClient } from "@/lib/supabaseClient";
+// import { getUserTokens, addTokens } from "@/lib/supabaseServer"; // Wait, addTokens is server, but get is ok client if RLS allows
 import { marked } from "marked";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+// const supabase = createClient(
+//   process.env.NEXT_PUBLIC_SUPABASE_URL,
+//   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+// );
 
 export default function Home() {
   const [countries, setCountries] = useState([{ country: "", years: "" }]);
