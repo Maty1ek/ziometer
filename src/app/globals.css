@@ -41,3 +41,21 @@ body {
 .submit_button {
   box-shadow: 0 0 10 0 rgba(0,0,0,.25);
 }
+
+.err_warn {
+  background-color: #ff2d2d3b;
+  backdrop-filter: blur(5);
+  box-shadow: 0 0 10px 0 rgba(0,0,0,.25);
+  border-radius: 15px;
+}
+
+.response_box {
+  backdrop-filter: blur(5);
+  
+  box-shadow: 0 4px 20px 0px rgba(0,0,0,.25);
+  @apply py-[16px] px-[18px] mt-[25px] w-full bg-[#fafafa3a] rounded-[15px]
+}
+
+.divider {
+  @apply w-full bg-[#414141] h-[1px] my-[20px]
+}
