@@ -25,7 +25,7 @@ const MainInputs = ({ countries, setCountries }) => {
   };
 
   return (
-    <div className="main_input_con mb-[10px] py-[16px] px-[20px] mt-[30px] w-full bg-[#fafafa3a] rounded-[15px]">
+    <div className="main_input_con mb-[10px] py-[16px] px-[20px] mt-[40px] w-full bg-[#fafafa3a] rounded-[15px]">
       <div className="text-[#414141]">
         <h1 className="font-extrabold text-[24px]">Countries and Years</h1>
         <p className="mt-[5px] ml-[1px] text-[15px]">
