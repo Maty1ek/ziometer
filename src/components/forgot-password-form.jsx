@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import { useState } from 'react'
+import { X } from 'lucide-react'
 
 export function ForgotPasswordForm({
   className,
@@ -45,9 +46,11 @@ export function ForgotPasswordForm({
   }
 
   return (
-    <div className={cn('flex flex-col gap-6', className)} {...props}>
+    <div className={cn('flex flex-col gap-6 fixed inset-0 bg-[#c7c7c7c4] backdrop-blur-[3px] bg-opacity-80  items-center justify-center p-[20px] z-50', className)} {...props}>
       {success ? (
-        <Card>
+        <Card className="relative">
+        <X className='absolute top-[12px] right-[12px]' onClick={props.onClose}/>
+
           <CardHeader>
             <CardTitle className="text-2xl">Check Your Email</CardTitle>
             <CardDescription>Password reset instructions sent</CardDescription>
@@ -60,12 +63,14 @@ export function ForgotPasswordForm({
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="relative">
+        <X className='absolute top-[12px] right-[12px]' onClick={props.onClose}/>
+
           <CardHeader>
-            <CardTitle className="text-2xl">Reset Your Password</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-2xl ">Reset Your Password</CardTitle>
+            {/* <CardDescription>
               Type in your email and we&apos;ll send you a link to reset your password
-            </CardDescription>
+            </CardDescription> */}
           </CardHeader>
           <CardContent>
             <form onSubmit={handleForgotPassword}>
@@ -87,9 +92,9 @@ export function ForgotPasswordForm({
               </div>
               <div className="mt-4 text-center text-sm">
                 Already have an account?{' '}
-                <Link href="/auth/login" className="underline underline-offset-4">
+                <button onClick={() => {props.onClose(); props.onLogin()}} className="underline underline-offset-4">
                   Login
-                </Link>
+                </button>
               </div>
             </form>
           </CardContent>

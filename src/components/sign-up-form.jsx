@@ -28,6 +28,27 @@ export function SignUpForm({
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
+  const handleSocialLogin = async (e) => {
+    e.preventDefault()
+    const supabase = createClient()
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/oauth?next=/`,
+        },
+      })
+
+      if (error) throw error
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An error occurred')
+      setIsLoading(false)
+    }
+  }
+
   const handleSignUp = async (e) => {
     e.preventDefault()
     const supabase = createClient()
@@ -45,11 +66,14 @@ export function SignUpForm({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/protected`,
+          emailRedirectTo: `${window.location.origin}/`,
         },
       })
+      
       if (error) throw error
-      router.push('/auth/sign-up-success')
+      props.onClose()
+      
+      // router.push('/auth/sign-up-success')
     } catch (error) {
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {
@@ -104,14 +128,20 @@ export function SignUpForm({
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? 'Creating an account...' : 'Sign up'}
               </Button>
-            </div>
-            <div className="mt-4 text-center text-sm">
+              <Button type="button" onClick={handleSocialLogin} className="w-full" disabled={isLoading}>
+                {isLoading ? 'Logging in...' : 'Continue with Google'}
+              </Button>
+          <div className="mt-4 text-center text-sm">
               Already have an account?{' '}
-              <Link href="/auth/login" className="underline underline-offset-4">
+              <button onClick={() => {props.onClose(); props.onLogin()}} className="underline underline-offset-4">
                 Login
-              </Link>
+              </button>
             </div>
+            </div>
+            
           </form>
+          
+          
         </CardContent>
       </Card>
     </div>

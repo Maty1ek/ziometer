@@ -12,6 +12,8 @@ import AuthModal from "@/components/AuthModal";
 // import { getUserTokens, addTokens } from "@/lib/supabaseServer"; // Wait, addTokens is server, but get is ok client if RLS allows
 import { marked } from "marked";
 import { SignUpForm } from "@/components/sign-up-form";
+import { LoginForm } from "@/components/login-form";
+import { ForgotPasswordForm } from "@/components/forgot-password-form";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -26,6 +28,8 @@ export default function Home() {
   const [user, setUser] = useState(null);
   const [tokens, setTokens] = useState(0);
   const [showAuth, setShowAuth] = useState(false);
+  const [showLogin, setShowLogin] = useState(false)
+  const [resetPassword, setResetPassword] = useState(false)
   const [showBuy, setShowBuy] = useState(false);
   const [warning, setWarning] = useState(false)
 
@@ -62,6 +66,68 @@ export default function Home() {
   //   if (saved) setCountries(JSON.parse(saved));
   // }, []);
 
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+    
+    
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    
+    console.log('yoo', user);
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  // Initialize profile with 1 free token if new user, or fetch existing tokens
+  useEffect(() => {
+    if (!user) {
+      setTokens(0);
+      return;
+    }
+    console.log('yoo12', user);
+    
+
+    async function initOrFetchProfile() {
+      const { data, error } = await supabase
+        .from('user_tokens')
+        .select('tokens')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error || !data) {
+        // No profile exists, create one with 1 free token
+        const { error: insertError } = await supabase
+          .from('user_tokens')
+          .insert({ user_id: user.id, tokens: 1 });
+
+        if (insertError) {
+          console.error('Error creating profile:', insertError);
+          setError('Failed to initialize your account. Please try again.');
+          return;
+        }
+
+        setTokens(1);
+      } else {
+        // Existing profile, set tokens
+        setTokens(data.tokens ?? 0);
+      }
+    }
+
+    initOrFetchProfile();
+  }, [user]);
+
+  // Load pending countries
+  useEffect(() => {
+    const saved = localStorage.getItem("pendingCountries");
+    if (saved) {
+      try {
+        setCountries(JSON.parse(saved));
+      } catch {}
+    }
+  }, []);
+
   const handleSubmit = async () => {
     const validCountries = countries.filter(
       (row) => row.country.trim() && row.years.trim()
@@ -89,13 +155,13 @@ export default function Home() {
     setAiResponse(null);
 
     try {
-      const response = await submitToGrok(validCountries);
+      const response = await submitToGrok(validCountries, user.id);
       // Deduct token server-side (add to submitToGrok or separate action)
       // await addTokens(user.id, -1); // Negative for deduct
       setAiResponse(response);
       setWarning(true)
 
-      // localStorage.removeItem("pendingCountries"); // Clear on success
+      localStorage.removeItem("pendingCountries"); // Clear on success
       setTokens(tokens - 1); // Update local
     } catch (err) {
       setError(err.message || "Error processing request.");
@@ -234,7 +300,9 @@ export default function Home() {
               USE AGAIN <span className="ml-[15px] flex items-center font-semibold"><Zap className="mr-[2px]"/>1</span>
             </button>
 )}
-          {showAuth && <SignUpForm onClose={() => setShowAuth(false)} />}
+          {showAuth && <SignUpForm onLogin={() => setShowLogin(true)} onClose={() => setShowAuth(false)} />}
+          {showLogin && <LoginForm onAuth={() => setShowAuth(true)} onClose={() => setShowLogin(false)} onReset={() => setResetPassword(true)} />}
+          {resetPassword && <ForgotPasswordForm onLogin={() => setShowLogin(true)}  onClose={() => setResetPassword(false)} />}
           {/* {showBuy && (
             <BuyModal user={user} onClose={() => setShowBuy(false)} />
           )} */}

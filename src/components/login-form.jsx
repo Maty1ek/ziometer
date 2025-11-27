@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { X } from 'lucide-react'
 
 export function LoginForm({
   className,
@@ -25,6 +26,27 @@ export function LoginForm({
   const [error, setError] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+
+  const handleSocialLogin = async (e) => {
+    e.preventDefault()
+    const supabase = createClient()
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/oauth?next=/`,
+        },
+      })
+
+      if (error) throw error
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An error occurred')
+      setIsLoading(false)
+    }
+  }
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -39,7 +61,9 @@ export function LoginForm({
       })
       if (error) throw error
       // Update this route to redirect to an authenticated route. The user already has an active session.
-      router.push('/protected')
+      props.onClose()
+
+      // router.push('/protected')
     } catch (error) {
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {
@@ -48,11 +72,13 @@ export function LoginForm({
   }
 
   return (
-    <div className={cn('flex flex-col gap-6', className)} {...props}>
-      <Card>
+    <div className={cn('flex flex-col gap-6 fixed inset-0 bg-[#c7c7c7c4] backdrop-blur-[3px] bg-opacity-80  items-center justify-center p-[20px] z-50', className)} {...props}>
+      <Card className="relative">
+        <X className='absolute top-[12px] right-[12px]' onClick={props.onClose}/>
         <CardHeader>
-          <CardTitle className="text-2xl">Login</CardTitle>
-          <CardDescription>Enter your email below to login to your account</CardDescription>
+
+          <CardTitle className="text-2xl text-center">Login</CardTitle>
+          {/* <CardDescription>Enter your email below to login to your account</CardDescription> */}
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin}>
@@ -70,11 +96,11 @@ export function LoginForm({
               <div className="grid gap-2">
                 <div className="flex items-center">
                   <Label htmlFor="password">Password</Label>
-                  <Link
-                    href="/auth/forgot-password"
+                  <button
+                    onClick={() => {props.onClose(); props.onReset()}}
                     className="ml-auto inline-block text-sm underline-offset-4 hover:underline">
                     Forgot your password?
-                  </Link>
+                  </button>
                 </div>
                 <Input
                   id="password"
@@ -87,12 +113,15 @@ export function LoginForm({
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? 'Logging in...' : 'Login'}
               </Button>
+              <Button type="button" onClick={handleSocialLogin} className="w-full" disabled={isLoading}>
+                {isLoading ? 'Logging in...' : 'Continue with Google'}
+              </Button>
             </div>
             <div className="mt-4 text-center text-sm">
               Don&apos;t have an account?{' '}
-              <Link href="/auth/sign-up" className="underline underline-offset-4">
+              <button onClick={() => {props.onClose(), props.onAuth()}} className="underline underline-offset-4">
                 Sign up
-              </Link>
+              </button>
             </div>
           </form>
         </CardContent>

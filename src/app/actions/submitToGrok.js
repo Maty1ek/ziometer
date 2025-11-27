@@ -1,9 +1,24 @@
 "use server";
 
 import { SYSTEM_PROMPT } from "@/lib/prompt";
+import { createClient } from "@/lib/supabase/server";
 import { supabase } from "@/lib/supabaseServer"; // Import server client for token ops
 
 export async function submitToGrok(countries, userId) {
+  const supabase = await createClient();
+
+  // Verify user and tokens
+  const { data: tokenRow, error: profileError } = await supabase
+    .from("user_tokens")
+    .select("tokens")
+    .eq("user_id", userId)
+    .single();
+
+  if (profileError)
+    throw new Error(`Token fetch error: ${profileError.message}`);
+  const tokens = tokenData?.tokens ?? 0;
+  if (tokens < 1) throw new Error("Insufficient tokens – 1 token required");
+
   // Added userId param – required for token check/deduct
   // Error check: Validate input countries
   if (!Array.isArray(countries) || countries.length === 0) {
@@ -68,11 +83,12 @@ export async function submitToGrok(countries, userId) {
     }
 
     // Token deduction after successful API call (new – server-side update)
-    // const { error: deductError } = await supabase
-    //   .from('user_tokens')
-    //   .update({ tokens: tokens - 1 })
-    //   .eq('user_id', userId);
-    // if (deductError) throw new Error(`Token deduction error: ${deductError.message}`);
+    const { error: updateError } = await supabase
+      .from("user_tokens")
+      .update({ tokens: tokenRow.tokens - 1 })
+      .eq("user_id", userId);
+
+    if (updateError) throw new Error("Failed to deduct token");
 
     return aiContent;
   } catch (err) {
