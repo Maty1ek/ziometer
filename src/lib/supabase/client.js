@@ -9,7 +9,8 @@ export function createClient() {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true,
+        flowType: 'pkce', // Use PKCE for modern security
       },
     }
   );
-}
+} 

@@ -4,8 +4,14 @@ import { SYSTEM_PROMPT } from "@/lib/prompt";
 import { createClient } from "@/lib/supabase/server";
 import { supabase } from "@/lib/supabaseServer"; // Import server client for token ops
 
-export async function submitToGrok(countries, userId) {
+// CHANGED: Removed userId param – now fetched securely from session
+export async function submitToGrok(countries) {
   const supabase = await createClient();
+
+  // NEW: Fetch authenticated user from session (ensures security and persistence)
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error("Unauthorized – no active session");
+  const userId = session.user.id;
 
   // Verify user and tokens
   const { data: tokenRow, error: profileError } = await supabase
@@ -16,10 +22,9 @@ export async function submitToGrok(countries, userId) {
 
   if (profileError)
     throw new Error(`Token fetch error: ${profileError.message}`);
-  const tokens = tokenData?.tokens ?? 0;
+  const tokens = tokenRow?.tokens ?? 0;
   if (tokens < 1) throw new Error("Insufficient tokens – 1 token required");
 
-  // Added userId param – required for token check/deduct
   // Error check: Validate input countries
   if (!Array.isArray(countries) || countries.length === 0) {
     throw new Error("Invalid countries input – must be a non-empty array");
@@ -31,16 +36,6 @@ export async function submitToGrok(countries, userId) {
     .join(
       "\n"
     )}\n\nAnalyze Israel's influence: percentage of life affected, and MD breakdown.`;
-
-  // Token check before API call (new – server-side validation)
-  // const { data: tokenData, error: tokenError } = await supabase
-  //   .from('user_tokens')
-  //   .select('tokens')
-  //   .eq('user_id', userId)
-  //   .single();
-  // if (tokenError) throw new Error(`Token fetch error: ${tokenError.message}`);
-  // const tokens = tokenData?.tokens ?? 0;
-  // if (tokens < 1) throw new Error("Insufficient tokens – 1 token required");
 
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) {

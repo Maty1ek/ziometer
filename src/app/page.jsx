@@ -21,7 +21,7 @@ const supabase = createClient(
 );
 
 export default function Home() {
-  const [countries, setCountries] = useState([{ country: "", years: "" }]);
+const [countries, setCountries] = useState([{ country: "", years: "" }]);
   const [isLoading, setIsLoading] = useState(false);
   const [aiResponse, setAiResponse] = useState(null);
   const [error, setError] = useState(null);
@@ -33,100 +33,55 @@ export default function Home() {
   const [showBuy, setShowBuy] = useState(false);
   const [warning, setWarning] = useState(false)
 
-  // Auth listener
-  // useEffect(() => {
-  //   const session = supabase.auth.getSession();
-  //   setUser(session?.user ?? null);
-  //   supabase.auth.onAuthStateChange((_event, session) => {
-  //     setUser(session?.user ?? null);
-  //   });
-  // }, []);
+  // NEW: Add loading state for initial session check
+  const [authLoading, setAuthLoading] = useState(true);
 
-  // Fetch tokens on user change
-  // useEffect(() => {
-  //   if (!user) {
-  //     setTokens(0);
-  //     return;
-  //   }
-  //   const fetchTokens = async () => {
-  //     const res = await fetch("/api/getTokens", {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify({ userId: user.id }),
-  //     });
-  //     const data = await res.json();
-  //     setTokens(data.tokens);
-  //   };
-  //   fetchTokens();
-  // }, [user]);
-
-  // Load pending countries from localStorage
-  // useEffect(() => {
-  //   const saved = localStorage.getItem("pendingCountries");
-  //   if (saved) setCountries(JSON.parse(saved));
-  // }, []);
-
+  // NEW: Effect for fetching initial session and setting up listener
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const fetchSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
       setUser(session?.user ?? null);
-    });
-    
-    
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log(session, user, 'ses');
+      setAuthLoading(false);
+    };
+
+    fetchSession();
+      console.log(user, 'ses2');
+
+
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      console.log(session, user, 'ses3');
     });
-    
-    console.log('yoo', user);
-    return () => listener.subscription.unsubscribe();
-  }, []);
 
-  // Initialize profile with 1 free token if new user, or fetch existing tokens
-  useEffect(() => {
-    if (!user) {
-      setTokens(0);
-      return;
-    }
-    console.log('yoo12', user);
-    
-
-    async function initOrFetchProfile() {
-      const { data, error } = await supabase
-        .from('user_tokens')
-        .select('tokens')
-        .eq('user_id', user.id)
-        .single();
-
-      if (error || !data) {
-        // No profile exists, create one with 1 free token
-        const { error: insertError } = await supabase
-          .from('user_tokens')
-          .insert({ user_id: user.id, tokens: 1 });
-
-        if (insertError) {
-          console.error('Error creating profile:', insertError);
-          setError('Failed to initialize your account. Please try again.');
-          return;
-        }
-
-        setTokens(1);
-      } else {
-        // Existing profile, set tokens
-        setTokens(data.tokens ?? 0);
-      }
-    }
-
-    initOrFetchProfile();
+    // Cleanup listener on unmount
+    return () => subscription.unsubscribe();
   }, [user]);
 
-  // Load pending countries
+  // NEW: Effect to fetch tokens when user changes (after session fetch or auth event)
   useEffect(() => {
-    const saved = localStorage.getItem("pendingCountries");
-    if (saved) {
-      try {
-        setCountries(JSON.parse(saved));
-      } catch {}
+    if (user) {
+      console.log(user, 'lolo');
+      
+      const fetchTokens = async () => {
+        const { data, error } = await supabase
+          .from('user_tokens')
+          .select('tokens')
+          .eq('user_id', user.id)
+          .single();
+        if (!error) {
+          setTokens(data?.tokens ?? 0);
+        } else {
+          console.error('Token fetch error:', error);
+        }
+      };
+      fetchTokens();
+    } else {
+      setTokens(0); // Reset if no user
     }
-  }, []);
+  }, [user]);
 
   const handleSubmit = async () => {
     const validCountries = countries.filter(
@@ -140,36 +95,60 @@ export default function Home() {
     // Save pending
     localStorage.setItem("pendingCountries", JSON.stringify(countries));
 
+    // CHANGED: Add authLoading check to prevent submit during initial load
+    if (authLoading) {
+      setError("Authenticating... please wait.");
+      return;
+    }
+
     if (!user) {
       setShowAuth(true);
       return;
     }
 
-    // if (tokens < 1) {
-    //   setShowBuy(true);
-    //   return;
-    // }
+    if (tokens < 1) {
+      setError("Insufficient tokens – 1 token required");
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
     setAiResponse(null);
 
     try {
-      const response = await submitToGrok(validCountries, user.id);
-      // Deduct token server-side (add to submitToGrok or separate action)
-      // await addTokens(user.id, -1); // Negative for deduct
+      // CHANGED: No user.id arg (from Step 1)
+      const response = await submitToGrok(validCountries);
       setAiResponse(response);
       setWarning(true)
 
       localStorage.removeItem("pendingCountries"); // Clear on success
-      setTokens(tokens - 1); // Update local
+
+      // NEW: No need to refetch tokens here – the effect above will handle updates if needed
+      // But you can optionally refetch if submit changes tokens (it's already done server-side)
     } catch (err) {
+      if (err.message.includes("Unauthorized")) {
+        setUser(null); // Reset user if session invalid
+        setShowAuth(true); // Re-prompt auth
+      } 
       setError(err.message || "Error processing request.");
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setTokens(0);
+    setAiResponse(null); // Optional: Reset UI
+  };
+
+  // NEW: Show loading UI during initial auth check
+  if (authLoading) {
+    return <div className="flex justify-center items-center min-h-screen">Loading authentication...</div>;
+  }
+
+  
   return (
     <div className="relative min-h-screen flex justify-center pt-[15px]">
       <div className="bg_circles absolute flex justify-center top-[-15px] w-full overflow-hidden">
@@ -300,6 +279,15 @@ export default function Home() {
               USE AGAIN <span className="ml-[15px] flex items-center font-semibold"><Zap className="mr-[2px]"/>1</span>
             </button>
 )}
+
+{user && (
+          <button
+            onClick={handleLogout}
+            className="logout_button mt-[20px] text-[#0f0f0f] text-[18px] font-semibold w-full rounded-[14px] bg-gray-200 h-[40px]"
+          >
+            Logout
+          </button>
+        )}
           {showAuth && <SignUpForm onLogin={() => setShowLogin(true)} onClose={() => setShowAuth(false)} />}
           {showLogin && <LoginForm onAuth={() => setShowAuth(true)} onClose={() => setShowLogin(false)} onReset={() => setResetPassword(true)} />}
           {resetPassword && <ForgotPasswordForm onLogin={() => setShowLogin(true)}  onClose={() => setResetPassword(false)} />}

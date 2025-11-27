@@ -32,10 +32,9 @@ export async function updateSession(request) {
   // supabase.auth.getClaims(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
 
-  // IMPORTANT: If you remove getClaims() and you use server-side rendering
-  // with the Supabase client, your users may be randomly logged out.
-  const { data } = await supabase.auth.getClaims()
-  const user = data?.claims
+  // CHANGED: Use getSession() explicitly for active refresh (replaces getClaims)
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user ?? null; // Extract user if needed (optional, but aligns with your setup)
 
   // if (
   //   !user &&

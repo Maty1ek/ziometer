@@ -34,14 +34,29 @@ export function LoginForm({
     setError(null)
 
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      const data = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/oauth?next=/`,
         },
       })
 
+      console.log(bigData,);
+      
+
       if (error) throw error
+
+      // if (data.session) {
+        // Immediate session (rare if confirmation enabled)
+        await supabase.auth.getSession(); 
+        // await supabase.auth.refreshSession()// Refresh to trigger listener
+        props.onClose();
+      // } else {
+      //   // Confirmation pending – show UI message
+      //   setError("Check your email to confirm signup!"); // Or use a success toast/state
+      //   props.onClose(); // Still close modal
+      // }
+    
     } catch (error) {
       setError(error instanceof Error ? error.message : 'An error occurred')
       setIsLoading(false)
@@ -61,6 +76,7 @@ export function LoginForm({
       })
       if (error) throw error
       // Update this route to redirect to an authenticated route. The user already has an active session.
+      await supabase.auth.getSession();
       props.onClose()
 
       // router.push('/protected')
