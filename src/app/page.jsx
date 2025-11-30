@@ -21,6 +21,7 @@ import { marked } from "marked";
 import { SignUpForm } from "@/components/sign-up-form";
 import { LoginForm } from "@/components/login-form";
 import { ForgotPasswordForm } from "@/components/forgot-password-form";
+import { deductToken } from "@/lib/deduct-token";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -45,29 +46,18 @@ export default function Home() {
 
   // NEW: Effect for fetching initial session and setting up listener
   useEffect(() => {
-    const fetchSession = async () => {
-      // const {
-      //   data: { session },
-      // } = await supabase.auth.getSession();
+   const fetchSession = async () => {
+    try {
+      const res = await fetch("/api/auth");
+      const data = await res.json();
 
-      // if (!session) {
-        await fetch("/api/auth")
-          .then((res) => res.json())
-          .then((data) => {
-            console.log(data,'yoohooo');
-            
-            setUser(data.session?.user);
-          })
-          .catch((err) => {
-            console.error("Error fetching session:", err);
-          });
-      // } else {
-      //   setUser(session?.user ?? null);
-      // }
-
-      // console.log(session, user, 'ses');
+      setUser(data.session?.user ?? null);
+    } catch (err) {
+      console.error("Error fetching session:", err);
+    } finally {
       setAuthLoading(false);
-    };
+    }
+  };
 
     fetchSession();
     // supabase.auth.getSession().then(({ data: { session } }) => {
@@ -105,6 +95,7 @@ export default function Home() {
         }
       };
       fetchTokens();
+      handleSubmit()
     } else {
       setTokens(0); // Reset if no user
     }
@@ -134,7 +125,7 @@ export default function Home() {
     }
 
     if (tokens < 1) {
-      setError("Insufficient tokens – 1 token required");
+      setShowBuy(true)
       return;
     }
 
@@ -150,6 +141,8 @@ export default function Home() {
 
       localStorage.removeItem("pendingCountries"); // Clear on success
 
+
+      deductToken(setTokens)
       // NEW: No need to refetch tokens here – the effect above will handle updates if needed
       // But you can optionally refetch if submit changes tokens (it's already done server-side)
     } catch (err) {
@@ -322,14 +315,7 @@ export default function Home() {
             </button>
           )}
 
-          {user && (
-            <button
-              onClick={handleLogout}
-              className="logout_button mt-[20px] text-[#0f0f0f] text-[18px] font-semibold w-full rounded-[14px] bg-gray-200 h-[40px]"
-            >
-              Logout
-            </button>
-          )}
+        
           {showAuth && (
             <SignUpForm
               onLogin={() => setShowLogin(true)}
@@ -349,9 +335,9 @@ export default function Home() {
               onClose={() => setResetPassword(false)}
             />
           )}
-          {/* {showBuy && (
+          {showBuy && (
             <BuyModal user={user} onClose={() => setShowBuy(false)} />
-          )} */}
+          )}
 
           {/* Token display */}
           {/* <div className="absolute top-[10px] right-[10px] flex items-center text-white">
