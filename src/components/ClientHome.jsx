@@ -1,14 +1,14 @@
-"use client";
+// src/components/ClientHome.jsx
+// CLIENT COMPONENT - 'use client'
+// Handles all state, effects, UI as before
+// Initializes user/tokens from props
+// Uses client Supabase for listener + token fetch on changes
+
+'use client';
+
 import Image from "next/image";
-import bgCircles from "../../public/bg_circles.svg";
-import {
-  CircleUserRound,
-  Instagram,
-  InstagramIcon,
-  Menu,
-  XIcon,
-  Zap,
-} from "lucide-react";
+// import bgCircles from "@/../../public";
+import { CircleUserRound, Instagram, InstagramIcon, Menu, XIcon, Zap } from "lucide-react";
 import MainInputs from "@/components/main-inputs";
 // import BuyModal from "@/components/BuyModal";
 import { useState, useEffect } from "react";
@@ -24,84 +24,60 @@ import { ForgotPasswordForm } from "@/components/forgot-password-form";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-export default function Home() {
+export default function ClientHome({ initialUser, initialTokens }) {
   const [countries, setCountries] = useState([{ country: "", years: "" }]);
   const [isLoading, setIsLoading] = useState(false);
   const [aiResponse, setAiResponse] = useState(null);
   const [error, setError] = useState(null);
-  const [user, setUser] = useState(null);
-  const [tokens, setTokens] = useState(0);
+  const [user, setUser] = useState(initialUser);
+  const [tokens, setTokens] = useState(initialTokens);
   const [showAuth, setShowAuth] = useState(false);
-  const [showLogin, setShowLogin] = useState(false);
-  const [resetPassword, setResetPassword] = useState(false);
+  const [showLogin, setShowLogin] = useState(false)
+  const [resetPassword, setResetPassword] = useState(false)
   const [showBuy, setShowBuy] = useState(false);
-  const [warning, setWarning] = useState(false);
+  const [warning, setWarning] = useState(false)
 
   // NEW: Add loading state for initial session check
-  const [authLoading, setAuthLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(!initialUser && !initialTokens); // Start false if server provided values
 
-  // NEW: Effect for fetching initial session and setting up listener
+  // Effect for setting up listener (real-time auth changes)
   useEffect(() => {
+    // If server didn't provide, fetch initial session client-side as fallback
     const fetchSession = async () => {
-      // const {
-      //   data: { session },
-      // } = await supabase.auth.getSession();
-
-      // if (!session) {
-        await fetch("/api/auth")
-          .then((res) => res.json())
-          .then((data) => {
-            console.log(data,'yoohooo');
-            
-            setUser(data.session?.user);
-          })
-          .catch((err) => {
-            console.error("Error fetching session:", err);
-          });
-      // } else {
-      //   setUser(session?.user ?? null);
-      // }
-
-      // console.log(session, user, 'ses');
+      if (!user) { // Only if not set by server
+        const { data: { session } } = await supabase.auth.getSession();
+        setUser(session?.user ?? null);
+      }
       setAuthLoading(false);
     };
 
     fetchSession();
-    // supabase.auth.getSession().then(({ data: { session } }) => {
-    //   setUser(session?.user ?? null);
-    // });
-    console.log(user, "ses2");
 
     // Set up auth state change listener
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      console.log(session, user, "ses3");
     });
 
     // Cleanup listener on unmount
     return () => subscription.unsubscribe();
   }, []);
 
-  // NEW: Effect to fetch tokens when user changes (after session fetch or auth event)
+  // Effect to fetch tokens when user changes (after session fetch or auth event)
   useEffect(() => {
     if (user) {
-      console.log(user, "lolo");
-
       const fetchTokens = async () => {
         const { data, error } = await supabase
-          .from("user_tokens")
-          .select("tokens")
-          .eq("user_id", user.id)
+          .from('user_tokens')
+          .select('tokens')
+          .eq('user_id', user.id)
           .single();
         if (!error) {
           setTokens(data?.tokens ?? 0);
         } else {
-          console.error("Token fetch error:", error);
+          console.error('Token fetch error:', error);
         }
       };
       fetchTokens();
@@ -146,7 +122,7 @@ export default function Home() {
       // CHANGED: No user.id arg (from Step 1)
       const response = await submitToGrok(validCountries);
       setAiResponse(response);
-      setWarning(true);
+      setWarning(true)
 
       localStorage.removeItem("pendingCountries"); // Clear on success
 
@@ -156,36 +132,32 @@ export default function Home() {
       if (err.message.includes("Unauthorized")) {
         setUser(null); // Reset user if session invalid
         setShowAuth(true); // Re-prompt auth
-      }
+      } 
       setError(err.message || "Error processing request.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // const handleLogout = async () => {
-  //   const supabase = crea
-  //   await supabase.auth.signOut();
-  //   setUser(null);
-  //   setTokens(0);
-  //   setAiResponse(null); // Optional: Reset UI
-  // };
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setTokens(0);
+    setAiResponse(null); // Optional: Reset UI
+  };
 
   // NEW: Show loading UI during initial auth check
   if (authLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        Loading authentication...
-      </div>
-    );
+    return <div className="flex justify-center items-center min-h-screen">Loading authentication...</div>;
   }
 
+  
   return (
     <div className="relative min-h-screen flex justify-center pt-[15px]">
       <div className="bg_circles absolute flex justify-center top-[-15px] w-full overflow-hidden">
         <div className="min-w-[760px]">
           <Image
-            src={bgCircles}
+            src="@/../../public/bg_circles.svg"
             width={760}
             height={2000}
             className=""
@@ -198,7 +170,7 @@ export default function Home() {
           <div className="heading_buttons w-full px-[0px] flex justify-between text-[#414141]">
             <div className="burger_button flex text-[30px] items-center justify-center bg-[#ffffff76] rounded-[30px] h-[48px] w-[78px]">
               {/* <Menu size={36} /> */}
-              <Zap size={30} className="mr-[4px]" /> {tokens}
+              <Zap size={30} className="mr-[4px]"/> {tokens}
             </div>
             <div className="account_button flex justify-center items-center bg-[#ffffff76] rounded-[100px] h-[48px] w-[48px]">
               <CircleUserRound size={36} />
@@ -247,20 +219,16 @@ export default function Home() {
               disabled={isLoading}
               className="submit_button mt-[30px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? (
-                "Processing..."
-              ) : (
+              {isLoading ? "Processing..." : (
                 <span className="flex items-center justify-center">
-                  SUBMIT{" "}
-                  <span className="ml-[15px] flex items-center font-semibold">
-                    <Zap className="mr-[2px]" />1
-                  </span>
+                SUBMIT <span className="ml-[15px] flex items-center font-semibold"><Zap className="mr-[2px]"/>1</span>
                 </span>
               )}
             </button>
           )}
 
-          {aiResponse && warning && (
+          { aiResponse && warning &&
+           (
             <div className="err_warn relative w-full mt-[20px] h-[100px] text-[#fff] px-[12px] py-[10px] border border-[#ff2d2d30]">
               <h4 className="text-[#FF3737] font-semibold">Warning!!!</h4>
 
@@ -268,13 +236,9 @@ export default function Home() {
                 This app is built with AI. There can be mistakes, the results
                 are not 100% accurate. Please do not trust this app completely.
               </p>
-              <XIcon
-                size="18"
-                className="absolute right-[10px] top-[10px]"
-                onClick={() => setWarning(false)}
-              />
+              <XIcon size="18" className="absolute right-[10px] top-[10px]" onClick={() => setWarning(false)} />
             </div>
-          )}
+          ) }
 
           {aiResponse && (
             <div className="response_box w-full text-[#414141]">
@@ -309,46 +273,27 @@ export default function Home() {
             </div>
           )}
 
-          {aiResponse && (
-            <button
+{aiResponse && (
+  <button
               onClick={() => setAiResponse(null)}
               // disabled={isLoading}
               className="submit_button flex items-center justify-center mt-[30px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              USE AGAIN{" "}
-              <span className="ml-[15px] flex items-center font-semibold">
-                <Zap className="mr-[2px]" />1
-              </span>
+              USE AGAIN <span className="ml-[15px] flex items-center font-semibold"><Zap className="mr-[2px]"/>1</span>
             </button>
-          )}
+)}
 
-          {user && (
-            <button
-              onClick={handleLogout}
-              className="logout_button mt-[20px] text-[#0f0f0f] text-[18px] font-semibold w-full rounded-[14px] bg-gray-200 h-[40px]"
-            >
-              Logout
-            </button>
-          )}
-          {showAuth && (
-            <SignUpForm
-              onLogin={() => setShowLogin(true)}
-              onClose={() => setShowAuth(false)}
-            />
-          )}
-          {showLogin && (
-            <LoginForm
-              onAuth={() => setShowAuth(true)}
-              onClose={() => setShowLogin(false)}
-              onReset={() => setResetPassword(true)}
-            />
-          )}
-          {resetPassword && (
-            <ForgotPasswordForm
-              onLogin={() => setShowLogin(true)}
-              onClose={() => setResetPassword(false)}
-            />
-          )}
+{user && (
+          <button
+            onClick={handleLogout}
+            className="logout_button mt-[20px] text-[#0f0f0f] text-[18px] font-semibold w-full rounded-[14px] bg-gray-200 h-[40px]"
+          >
+            Logout
+          </button>
+        )}
+          {showAuth && <SignUpForm onLogin={() => setShowLogin(true)} onClose={() => setShowAuth(false)} />}
+          {showLogin && <LoginForm onAuth={() => setShowAuth(true)} onClose={() => setShowLogin(false)} onReset={() => setResetPassword(true)} />}
+          {resetPassword && <ForgotPasswordForm onLogin={() => setShowLogin(true)}  onClose={() => setResetPassword(false)} />}
           {/* {showBuy && (
             <BuyModal user={user} onClose={() => setShowBuy(false)} />
           )} */}
