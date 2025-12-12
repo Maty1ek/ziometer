@@ -10,7 +10,7 @@ import {
   Zap,
 } from "lucide-react";
 import MainInputs from "@/components/main-inputs";
-// import BuyModal from "@/components/BuyModal";
+import BuyModal from "@/components/BuyModal";
 import { useState, useEffect } from "react";
 import { submitToGrok } from "@/app/actions/submitToGrok";
 import { createClient } from "@supabase/supabase-js";
@@ -41,23 +41,26 @@ export default function Home() {
   const [showBuy, setShowBuy] = useState(false);
   const [warning, setWarning] = useState(false);
 
+  const [pendingSubmit, setPendingSubmit] = useState(false);
+  const [isFetchingTokens, setIsFetchingTokens] = useState(false);
+
   // NEW: Add loading state for initial session check
   const [authLoading, setAuthLoading] = useState(true);
 
   // NEW: Effect for fetching initial session and setting up listener
   useEffect(() => {
-   const fetchSession = async () => {
-    try {
-      const res = await fetch("/api/auth");
-      const data = await res.json();
+    const fetchSession = async () => {
+      try {
+        const res = await fetch("/api/auth");
+        const data = await res.json();
 
-      setUser(data.session?.user ?? null);
-    } catch (err) {
-      console.error("Error fetching session:", err);
-    } finally {
-      setAuthLoading(false);
-    }
-  };
+        setUser(data.session?.user ?? null);
+      } catch (err) {
+        console.error("Error fetching session:", err);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
 
     fetchSession();
     // supabase.auth.getSession().then(({ data: { session } }) => {
@@ -77,29 +80,86 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // NEW: Effect to fetch tokens when user changes (after session fetch or auth event)
+  useEffect(() => {
+    const saved = localStorage.getItem("pendingCountries");
+    if (saved) setCountries(JSON.parse(saved));
+
+    const savedPending = localStorage.getItem("pendingSubmit");
+    if (savedPending) {
+      setPendingSubmit(JSON.parse(savedPending));
+    }
+  }, []);
+
+  useEffect(() => {
+  localStorage.setItem("pendingSubmit", JSON.stringify(pendingSubmit));
+}, [pendingSubmit]);
+
+  const fetchTokens = async () => {
+    if (!user) return;
+    setIsFetchingTokens(true);
+    try {
+      const { data, error } = await supabase
+        .from("user_tokens")
+        .select("tokens")
+        .eq("user_id", user.id)
+        .single();
+      if (!error) {
+        setTokens(data?.tokens ?? 0);
+      } else {
+        console.error("Token fetch error:", error);
+      }
+    } finally {
+      setIsFetchingTokens(false);
+    }
+  };
+
   useEffect(() => {
     if (user) {
-      console.log(user, "lolo");
-
-      const fetchTokens = async () => {
-        const { data, error } = await supabase
-          .from("user_tokens")
-          .select("tokens")
-          .eq("user_id", user.id)
-          .single();
-        if (!error) {
-          setTokens(data?.tokens ?? 0);
-        } else {
-          console.error("Token fetch error:", error);
-        }
-      };
       fetchTokens();
-      handleSubmit()
     } else {
-      setTokens(0); // Reset if no user
+      setTokens(0);
     }
   }, [user]);
+
+  useEffect(() => {
+    console.log(pendingSubmit, user, authLoading, isFetchingTokens, "hello po");
+
+    if (pendingSubmit && user && !authLoading && !isFetchingTokens) {
+      if (tokens >= 1) {
+        doSubmit();
+        setShowBuy(false); // Hide if shown briefly
+      } else if (!showBuy) {
+        setShowBuy(true);
+      }
+    }
+  }, [user, tokens, pendingSubmit, authLoading, isFetchingTokens]);
+
+  const doSubmit = async () => {
+    setIsLoading(true);
+    setError(null);
+    setAiResponse(null);
+
+    try {
+      // const response = await submitToGrok(validCountries);
+      setAiResponse("response");
+      setWarning(true);
+
+      localStorage.removeItem("pendingCountries");
+
+      deductToken(user, setTokens);
+      localStorage.removeItem("pendingSubmit");
+    } catch (err) {
+      if (err.message.includes("Unauthorized")) {
+        setUser(null);
+        setShowAuth(true);
+      }
+      setError(err.message || "Error processing request.");
+      console.log(err.message);
+    } finally {
+      setIsLoading(false);
+      localStorage.removeItem("pendingSubmit")
+    }
+  };
 
   const handleSubmit = async () => {
     const validCountries = countries.filter(
@@ -119,41 +179,20 @@ export default function Home() {
       return;
     }
 
+    setPendingSubmit(true);
+    console.log(pendingSubmit);
+
     if (!user) {
       setShowAuth(true);
       return;
     }
 
     if (tokens < 1) {
-      setShowBuy(true)
+      setShowBuy(true);
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
-    setAiResponse(null);
-
-    try {
-      // CHANGED: No user.id arg (from Step 1)
-      const response = await submitToGrok(validCountries);
-      setAiResponse(response);
-      setWarning(true);
-
-      localStorage.removeItem("pendingCountries"); // Clear on success
-
-
-      deductToken(setTokens)
-      // NEW: No need to refetch tokens here – the effect above will handle updates if needed
-      // But you can optionally refetch if submit changes tokens (it's already done server-side)
-    } catch (err) {
-      if (err.message.includes("Unauthorized")) {
-        setUser(null); // Reset user if session invalid
-        setShowAuth(true); // Re-prompt auth
-      }
-      setError(err.message || "Error processing request.");
-    } finally {
-      setIsLoading(false);
-    }
+    await doSubmit();
   };
 
   // const handleLogout = async () => {
@@ -269,7 +308,7 @@ export default function Home() {
             </div>
           )}
 
-          {aiResponse && (
+          {/*   {aiResponse && (
             <div className="response_box w-full text-[#414141]">
               <div className="life_affection">
                 <h3 className="text-[22px] font-semibold">
@@ -287,7 +326,7 @@ export default function Home() {
                 </h3>
                 <h4 className="font-black mt-[20px] text-[20px]">5 billion $USD</h4>
               </div>
-              <div className="divider"></div> */}
+              <div className="divider"></div> 
               <div className="breakdown">
                 <h3 className="font-semibold text-[22px]">Breakdown:</h3>
                 <p
@@ -300,7 +339,7 @@ export default function Home() {
                 />
               </div>
             </div>
-          )}
+          )}  */}
 
           {aiResponse && (
             <button
@@ -315,30 +354,50 @@ export default function Home() {
             </button>
           )}
 
-        
           {showAuth && (
             <SignUpForm
               onLogin={() => setShowLogin(true)}
-              onClose={() => setShowAuth(false)}
+              onClose={() => {
+                setShowAuth(false);
+                if (!user) setPendingSubmit(false);
+                localStorage.removeItem("pendingSubmit");
+              }}
             />
           )}
           {showLogin && (
             <LoginForm
               onAuth={() => setShowAuth(true)}
-              onClose={() => setShowLogin(false)}
+              onClose={() => {
+                setShowLogin(false);
+                if (!user) setPendingSubmit(false);
+                localStorage.removeItem("pendingSubmit");
+              }}
               onReset={() => setResetPassword(true)}
             />
           )}
           {resetPassword && (
             <ForgotPasswordForm
               onLogin={() => setShowLogin(true)}
-              onClose={() => setResetPassword(false)}
+              onClose={() => {
+                setResetPassword(false);
+                if (!user) setPendingSubmit(false);
+                localStorage.removeItem("pendingSubmit");
+              }}
             />
           )}
           {showBuy && (
-            <BuyModal user={user} onClose={() => setShowBuy(false)} />
+            <BuyModal
+              user={user}
+              onClose={() => {
+                setShowBuy(false);
+                if (tokens < 1) setPendingSubmit(false);
+                localStorage.removeItem("pendingSubmit");
+              }}
+              onBuySuccess={fetchTokens}
+            /> // Add onBuySuccess prop
           )}
 
+          {user && <div>LOGOUT</div>}
           {/* Token display */}
           {/* <div className="absolute top-[10px] right-[10px] flex items-center text-white">
             <span className="mr-[5px]">Tokens:</span>

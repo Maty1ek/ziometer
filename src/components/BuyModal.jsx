@@ -16,13 +16,14 @@ export default function BuyModal({ user, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-[20px] z-50">
+    <div className="flex flex-col gap-6 fixed inset-0 bg-[#c7c7c723] backdrop-blur-[3px] bg-opacity-80  items-center justify-center p-[20px] z-50">
       <div className="bg-white rounded-[15px] max-w-[500px] w-full p-[20px] space-y-[15px] text-[#414141]">
         <h2 className="font-bold text-[24px] text-center">Choose a Token Pack</h2>
         {[
           { plan: 'starter', price: '$4.99', tokens: 5, desc: 'Perfect for your first analysis' },
           { plan: 'explorer', price: '$9.99', tokens: 15, desc: 'Save 25% – most popular' },
           { plan: 'deep-dive', price: '$16.99', tokens: 30, desc: 'Best value – never run out' },
+          { plan: 'test', price: '$1', tokens: 30, desc: 'testt' },
         ].map((p) => (
           <button
             key={p.plan}
