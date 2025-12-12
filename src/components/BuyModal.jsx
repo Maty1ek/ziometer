@@ -1,40 +1,63 @@
 // components/BuyModal.jsx
-'use client';
-import { createWhopCheckout } from '@/app/actions/createWhopCheckout';
+"use client";
+import { createWhopCheckout } from "@/app/actions/createWhopCheckout";
+import { PLANS } from "@/lib/plans";
+import { useState } from "react";
 
 export default function BuyModal({ user, onClose }) {
-  const handleBuy = async (plan, price) => { 
+  const [loadingPlan, setLoadingPlan] = useState(null);
+
+  const handleBuy = async (planKey) => {
+    if (!user?.id) {
+      alert("User not authenticated – log in first");
+      return;
+    }
+
+    setLoadingPlan(planKey);
+
     try {
-        console.log(user.email, plan,'yoohooo');
-      const url = await createWhopCheckout(plan, price, user.email);
+      // We pass 'starter', 'explorer', etc.
+      const url = await createWhopCheckout(planKey, user.id);
       
-      window.location.href = url; // Full redirect to Whop
+      // Redirect user to Whop
+      window.location.href = url; 
     } catch (err) {
-      console.error('Checkout error:', err);
-      alert('Checkout failed – try again');
+      console.error("Checkout error:", err);
+      alert("Checkout failed – try again");
+    } finally {
+      setLoadingPlan(null);
     }
   };
 
   return (
-    <div className="flex flex-col gap-6 fixed inset-0 bg-[#c7c7c723] backdrop-blur-[3px] bg-opacity-80  items-center justify-center p-[20px] z-50">
+    <div className="flex flex-col gap-6 fixed inset-0 bg-[#c7c7c723] backdrop-blur-[3px] bg-opacity-80 items-center justify-center p-[20px] z-50">
       <div className="bg-white rounded-[15px] max-w-[500px] w-full p-[20px] space-y-[15px] text-[#414141]">
-        <h2 className="font-bold text-[24px] text-center">Choose a Token Pack</h2>
-        {[
-          { plan: 'starter', price: '$4.99', tokens: 5, desc: 'Perfect for your first analysis' },
-          { plan: 'explorer', price: '$9.99', tokens: 15, desc: 'Save 25% – most popular' },
-          { plan: 'deep-dive', price: '$16.99', tokens: 30, desc: 'Best value – never run out' },
-          { plan: 'test', price: '$1', tokens: 30, desc: 'testt' },
-        ].map((p) => (
+        <h2 className="font-bold text-[24px] text-center">
+          Choose a Token Pack
+        </h2>
+        
+        {/* Iterate over your PLANS object */}
+        {Object.entries(PLANS).map(([key, p]) => (
           <button
-            key={p.plan}
-            onClick={() => handleBuy(p.plan, p.price)}
-            className="w-full p-[10px] bg-[#fafafa] rounded-[10px] text-left hover:bg-gray-100 transition"
+            key={key}
+            onClick={() => handleBuy(key)} // Passing the KEY ('starter', etc)
+            disabled={loadingPlan === key}
+            className="w-full p-[10px] bg-[#fafafa] rounded-[10px] text-left hover:bg-gray-100 transition disabled:opacity-50 disabled:cursor-not-allowed border border-transparent hover:border-gray-200"
           >
-            <div className="font-bold text-[18px]">{p.price} – {p.tokens} tokens</div>
-            <div className="text-[15px]">{p.desc}</div>
+            <div className="flex justify-between items-center">
+                <span className="font-bold text-[18px]">{p.price} – {p.tokens} tokens</span>
+                {loadingPlan === key && <span className="text-xs text-blue-500 animate-pulse">Redirecting...</span>}
+            </div>
+            <div className="text-[15px] text-gray-500">{p.desc}</div>
           </button>
         ))}
-        <button onClick={onClose} className="w-full text-[#414141] text-[15px] underline">Cancel</button>
+
+        <button
+          onClick={onClose}
+          className="w-full text-[#414141] text-[15px] underline hover:text-black mt-2"
+        >
+          Cancel
+        </button>
       </div>
     </div>
   );

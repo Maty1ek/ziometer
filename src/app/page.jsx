@@ -14,7 +14,7 @@ import BuyModal from "@/components/BuyModal";
 import { useState, useEffect } from "react";
 import { submitToGrok } from "@/app/actions/submitToGrok";
 import { createClient } from "@supabase/supabase-js";
-import AuthModal from "@/components/AuthModal";
+// import AuthModal from "@/components/AuthModal";
 // import { supabaseClient } from "@/lib/supabaseClient";
 // import { getUserTokens, addTokens } from "@/lib/supabaseServer"; // Wait, addTokens is server, but get is ok client if RLS allows
 import { marked } from "marked";
