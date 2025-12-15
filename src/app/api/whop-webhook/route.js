@@ -1,65 +1,97 @@
-// app/api/whop-webhook/route.js
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { createClient as createWhopClient } from '@whop-sdk/server';
+// app/api/webhooks/route.ts
+import { whopsdk } from "@/lib/whop";
+import { createClient } from "@supabase/supabase-js";
 
-const whopSdk = createWhopClient({
-  apiKey: process.env.WHOP_API_KEY,
-});
 
-export async function POST(req) {
-  const body = await req.text(); // Raw body for signature verification
-  const signature = req.headers.get('x-whop-signature');
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
-  // Verify webhook signature
-  const isValid = whopSdk.webhooks.verifyWebhookSignature({
-    body,
-    signature,
-    secret: process.env.WHOP_WEBHOOK_SECRET, // Set this in env (from Whop dashboard)
-  });
+export async function POST(request) {
+  try {
+    // For testing: Parse body as JSON instead of using Whop unwrap (bypasses verification)
+    const webhookData = await request.json();
+    console.log(webhookData, 'loi');
+    
 
-  if (!isValid) {
-    return new Response(JSON.stringify({ error: 'Invalid signature' }), { status: 401 });
+    if (webhookData.type === "payment.succeeded") {
+      const payment = webhookData.data;
+      const metadata = payment.checkout_configuration?.metadata;
+
+      if (metadata && metadata.user_id && metadata.tokens) {
+        const userId = metadata.user_id; // Assume string UUID
+        const tokens = parseInt(metadata.tokens, 10);
+
+        // Validate: Skip if invalid (prevents crashes or bad data)
+        if (typeof userId === 'string' && !isNaN(tokens) && tokens > 0) {
+          const { error } = await supabaseAdmin.rpc('add_tokens', {
+            p_user_id: userId,
+            p_tokens: tokens,
+          });
+
+          if (error) {
+            console.error('Error adding tokens:', error);
+            // TODO: Add to error queue in Supabase for retries
+          } // No else needed here—success is silent (log if verbose needed)
+        } else {
+          console.error('Invalid userId or tokens in metadata:', metadata);
+        }
+      } else {
+        console.error('Missing or invalid metadata for payment succeeded');
+      }
+    }
+
+    // Always acknowledge webhook to prevent retries
+    return new Response('OK', { status: 200 });
+  } catch (err) {
+    console.error('Webhook processing error:', err);
+    // Still return 200 to avoid endless retries; handle errors internally
+    return new Response('OK', { status: 200 });
   }
-
-  const event = JSON.parse(body);
-
-  if (event.type === 'payment.succeeded') {
-    const { metadata } = event.data;
-    const userId = metadata.user_id;
-    const tokensToAdd = parseInt(metadata.tokens, 10);
-
-    if (!userId || isNaN(tokensToAdd) || tokensToAdd <= 0) {
-      console.error('Invalid metadata:', metadata);
-      return new Response(JSON.stringify({ error: 'Invalid metadata' }), { status: 400 });
-    }
-
-    // Fetch current profile
-    const { data: profile, error: fetchError } = await supabaseAdmin
-      .from('profiles')
-      .select('tokens')
-      .eq('id', userId)
-      .single();
-
-    if (fetchError || !profile) {
-      console.error('Fetch profile error:', fetchError);
-      return new Response(JSON.stringify({ error: 'Profile not found' }), { status: 500 });
-    }
-
-    // Update tokens
-    const newTokens = (profile.tokens || 0) + tokensToAdd;
-    const { error: updateError } = await supabaseAdmin
-      .from('profiles')
-      .update({ tokens: newTokens })
-      .eq('id', userId);
-
-    if (updateError) {
-      console.error('Update error:', updateError);
-      return new Response(JSON.stringify({ error: 'Update failed' }), { status: 500 });
-    }
-
-    console.log(`Added ${tokensToAdd} tokens to user ${userId}. New balance: ${newTokens}`);
-  }
-
-  // Acknowledge webhook (Whop retries on non-2xx)
-  return new Response(JSON.stringify({ received: true }), { status: 200 });
 }
+
+
+// export async function POST(request) {
+//   try {
+//     const requestBodyText = await request.text();
+//     const headers = Object.fromEntries(request.headers);
+
+//     // Unwrap webhook (assumes SDK is configured with webhook secret for verification)
+//     const webhookData = whopsdk.webhooks.unwrap(requestBodyText, { headers });
+
+//     if (webhookData.type === "payment.succeeded") {
+//       const payment = webhookData.data;
+//       const metadata = payment.checkout_configuration?.metadata;
+
+//       if (metadata && metadata.user_id && metadata.tokens) {
+//         const userId = metadata.user_id; // Assume string UUID
+//         const tokens = parseInt(metadata.tokens, 10);
+
+//         // Validate: Skip if invalid (prevents crashes or bad data)
+//         if (typeof userId === 'string' && !isNaN(tokens) && tokens > 0) {
+//           const { error } = await supabaseAdmin.rpc('add_tokens', {
+//             p_user_id: userId,
+//             p_tokens: tokens,
+//           });
+
+//           if (error) {
+//             console.error('Error adding tokens:', error);
+//             // TODO: Add to error queue in Supabase for retries
+//           } // No else needed here—success is silent (log if verbose needed)
+//         } else {
+//           console.error('Invalid userId or tokens in metadata:', metadata);
+//         }
+//       } else {
+//         console.error('Missing or invalid metadata for payment succeeded');
+//       }
+//     }
+
+//     // Always acknowledge webhook to prevent retries
+//     return new Response('OK', { status: 200 });
+//   } catch (err) {
+//     console.error('Webhook processing error:', err);
+//     // Still return 200 to avoid endless retries; handle errors internally
+//     return new Response('OK', { status: 200 });
+//   }
+// }

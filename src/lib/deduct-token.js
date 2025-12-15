@@ -1,4 +1,4 @@
-export const deductToken = async (user, setTokens) => {
+export const deductToken = async (user, fetchTokens) => {
   if (!user) return;
 
   const res = await fetch("/api/tokens/deduct", {
@@ -12,8 +12,10 @@ export const deductToken = async (user, setTokens) => {
 
   const data = await res.json();
 
+  fetchTokens(true)
+
   if (data.success) {
-    setTokens((prev) => prev - 1)
+    return 'success'
   } else {
     return `Token deduction error: ${data.error}`;
   }

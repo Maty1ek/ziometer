@@ -78,12 +78,12 @@ export async function submitToGrok(countries) {
     }
 
     // Token deduction after successful API call (new – server-side update)
-    const { error: updateError } = await supabase
-      .from("user_tokens")
-      .update({ tokens: tokenRow.tokens - 1 })
-      .eq("user_id", userId);
+    // const { error: updateError } = await supabase
+    //   .from("user_tokens")
+    //   .update({ tokens: tokenRow.tokens - 1 })
+    //   .eq("user_id", userId);
 
-    if (updateError) throw new Error("Failed to deduct token");
+    // if (updateError) throw new Error("Failed to deduct token");
 
     return aiContent;
   } catch (err) {

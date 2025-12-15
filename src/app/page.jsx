@@ -6,6 +6,7 @@ import {
   Instagram,
   InstagramIcon,
   Menu,
+  Plus,
   XIcon,
   Zap,
 } from "lucide-react";
@@ -14,14 +15,13 @@ import BuyModal from "@/components/BuyModal";
 import { useState, useEffect } from "react";
 import { submitToGrok } from "@/app/actions/submitToGrok";
 import { createClient } from "@supabase/supabase-js";
-// import AuthModal from "@/components/AuthModal";
-// import { supabaseClient } from "@/lib/supabaseClient";
-// import { getUserTokens, addTokens } from "@/lib/supabaseServer"; // Wait, addTokens is server, but get is ok client if RLS allows
 import { marked } from "marked";
 import { SignUpForm } from "@/components/sign-up-form";
 import { LoginForm } from "@/components/login-form";
 import { ForgotPasswordForm } from "@/components/forgot-password-form";
 import { deductToken } from "@/lib/deduct-token";
+import { useRouter, useSearchParams } from "next/navigation";
+import AccountModal from "@/components/AccountModal";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -29,6 +29,9 @@ const supabase = createClient(
 );
 
 export default function Home() {
+  const searchParams = useSearchParams(); // HOOK FOR URL PARAMS
+  const router = useRouter();
+
   const [countries, setCountries] = useState([{ country: "", years: "" }]);
   const [isLoading, setIsLoading] = useState(false);
   const [aiResponse, setAiResponse] = useState(null);
@@ -40,12 +43,66 @@ export default function Home() {
   const [resetPassword, setResetPassword] = useState(false);
   const [showBuy, setShowBuy] = useState(false);
   const [warning, setWarning] = useState(false);
+  const [isToken, setIsToken] = useState(false);
+
+  const [showAccount, setShowAccount] = useState(false);
 
   const [pendingSubmit, setPendingSubmit] = useState(false);
   const [isFetchingTokens, setIsFetchingTokens] = useState(false);
 
   // NEW: Add loading state for initial session check
   const [authLoading, setAuthLoading] = useState(true);
+
+  const [isPollingPayment, setIsPollingPayment] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("payment") === "success") {
+      setIsPollingPayment(true);
+      // Clean the URL without refreshing the page
+      router.replace("/");
+    }
+  }, [searchParams, router]);
+
+  useEffect(() => {
+    let intervalId;
+
+    if (isPollingPayment && user) {
+      console.log("Polling for tokens started...");
+
+      // Initial quick check
+      const checkTokens = async () => {
+        console.log("oioioioi");
+
+        const { data } = await supabase
+          .from("user_tokens")
+          .select("tokens")
+          .eq("user_id", user.id)
+          .single();
+
+        const currentTokens = data?.tokens ?? 0;
+
+        if (currentTokens > 0) {
+          setTokens(currentTokens);
+          setIsPollingPayment(false); // Stop polling triggers the cleanup
+        }
+      };
+
+      checkTokens(); // Run once immediately
+
+      // Run every 2 seconds
+      intervalId = setInterval(checkTokens, 2000);
+
+      // Stop automatically after 30 seconds to save resources
+      setTimeout(() => {
+        if (isPollingPayment) setIsPollingPayment(false);
+      }, 30000);
+    }
+
+    // Cleanup: This runs when isPollingPayment becomes false OR component unmounts
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [isPollingPayment, user]);
 
   // NEW: Effect for fetching initial session and setting up listener
   useEffect(() => {
@@ -63,9 +120,7 @@ export default function Home() {
     };
 
     fetchSession();
-    // supabase.auth.getSession().then(({ data: { session } }) => {
-    //   setUser(session?.user ?? null);
-    // });
+
     console.log(user, "ses2");
 
     // Set up auth state change listener
@@ -91,12 +146,12 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-  localStorage.setItem("pendingSubmit", JSON.stringify(pendingSubmit));
-}, [pendingSubmit]);
+    localStorage.setItem("pendingSubmit", JSON.stringify(pendingSubmit));
+  }, [pendingSubmit]);
 
-  const fetchTokens = async () => {
+  const fetchTokens = async (isDeduct) => {
     if (!user) return;
-    setIsFetchingTokens(true);
+    isDeduct ? "" : setIsFetchingTokens(true);
     try {
       const { data, error } = await supabase
         .from("user_tokens")
@@ -109,7 +164,7 @@ export default function Home() {
         console.error("Token fetch error:", error);
       }
     } finally {
-      setIsFetchingTokens(false);
+      isDeduct ? "" : setIsFetchingTokens(false);
     }
   };
 
@@ -122,34 +177,52 @@ export default function Home() {
   }, [user]);
 
   useEffect(() => {
-    console.log(pendingSubmit, user, authLoading, isFetchingTokens, "hello po");
+    // Only proceed if we are NOT currently verifying a payment
+    if (isPollingPayment) return;
 
     if (pendingSubmit && user && !authLoading && !isFetchingTokens) {
       if (tokens >= 1) {
+        // Success case: We have tokens and a pending job -> Submit
         doSubmit();
-        setShowBuy(false); // Hide if shown briefly
+        setShowBuy(false);
       } else if (!showBuy) {
+        // Fail case: No tokens -> Show buy modal
         setShowBuy(true);
       }
     }
-  }, [user, tokens, pendingSubmit, authLoading, isFetchingTokens]);
+  }, [
+    user,
+    pendingSubmit,
+    authLoading,
+    isFetchingTokens,
+    tokens,
+    isPollingPayment,
+  ]);
 
   const doSubmit = async () => {
+    if (isLoading) return; // Prevent double clicks
+
     setIsLoading(true);
     setError(null);
     setAiResponse(null);
 
     try {
-      // const response = await submitToGrok(validCountries);
-      setAiResponse("response");
+      // 1. Run your AI Logic
+      const response = await submitToGrok(countries);
+      setAiResponse(response); // Mock response
       setWarning(true);
 
+      // 2. Clear pending storage
       localStorage.removeItem("pendingCountries");
-
-      deductToken(user, setTokens);
       localStorage.removeItem("pendingSubmit");
+
+      // 3. IMPORTANT: Update State to prevent infinite loop
+      setPendingSubmit(false);
+
+      // 4. Deduct Token
+      await deductToken(user, fetchTokens);
     } catch (err) {
-      if (err.message.includes("Unauthorized")) {
+      if (err.message && err.message.includes("Unauthorized")) {
         setUser(null);
         setShowAuth(true);
       }
@@ -157,7 +230,9 @@ export default function Home() {
       console.log(err.message);
     } finally {
       setIsLoading(false);
-      localStorage.removeItem("pendingSubmit")
+      // Ensure state is cleared in case of error too
+      localStorage.removeItem("pendingSubmit");
+      setPendingSubmit(false);
     }
   };
 
@@ -195,13 +270,32 @@ export default function Home() {
     await doSubmit();
   };
 
-  // const handleLogout = async () => {
-  //   const supabase = crea
-  //   await supabase.auth.signOut();
-  //   setUser(null);
-  //   setTokens(0);
-  //   setAiResponse(null); // Optional: Reset UI
-  // };
+  const handleLogOut = async () => {
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("Logout error:", error);
+      setError("Failed to log out. Please try again.");
+      return;
+    }
+
+    // Clear local state
+    setTokens(0);
+    setAiResponse(null);
+    setWarning(false);
+    setError(null);
+    localStorage.removeItem("pendingCountries");
+
+    // Close modal first
+    setShowAccount(false);
+
+    // Force full reload — most reliable in App Router to clear server cache
+    window.location.href = "/";
+  } catch (err) {
+    console.error("Unexpected logout error:", err);
+    setError("Logout failed.");
+  }
+};
 
   // NEW: Show loading UI during initial auth check
   if (authLoading) {
@@ -228,32 +322,25 @@ export default function Home() {
       <div className="flex flex-col justify-center items-center relative w-full max-w-[500px] mx-auto">
         <div className="mainCon z-10 flex flex-col px-[20px] items-center w-full min-w-[308px] pt-[15px] h-full pb-[40px]">
           <div className="heading_buttons w-full px-[0px] flex justify-between text-[#414141]">
-            <div className="burger_button flex text-[30px] items-center justify-center bg-[#ffffff76] rounded-[30px] h-[48px] w-[78px]">
+            <div
+              className="burger_button flex items-center gap-[10px]"
+              onClick={() => setShowBuy(true)}
+            >
               {/* <Menu size={36} /> */}
-              <Zap size={30} className="mr-[4px]" /> {tokens}
+              <div className="flex text-[30px] cursor-pointer items-center justify-center bg-[#ffffff76] rounded-[30px] h-[48px] w-[90px]">
+                <Zap size={30} className="mr-[4px]" /> {tokens}
+              </div>
+              <div className="flex cursor-pointer text-[30px] leading-none items-center justify-center font-mdeium bg-[#ffffff76] rounded-[100%] w-[45px] h-[45px]">
+                <Plus />
+              </div>
             </div>
-            <div className="account_button flex justify-center items-center bg-[#ffffff76] rounded-[100px] h-[48px] w-[48px]">
+            <div
+              className="account_button flex cursor-pointer justify-center items-center bg-[#ffffff76] rounded-[100px] h-[48px] w-[48px]"
+              onClick={() => setShowAccount(true)}
+            >
               <CircleUserRound size={36} />
             </div>
           </div>
-          {/* <div className="text-[#414141] heading_buttons w-full flex justify-between  ">
-            <a href="https://www.instagram.com/g.zhann/" target="blank" className="bg-[#ffffff76] rounded-[10px] p-[5px]">
-              <InstagramIcon size={32}/>
-            </a>
-            <a href="https://www.tiktok.com/@g.zhann1" target="blank" className="bg-[#ffffff76] rounded-[10px] p-[5px] ">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="#414141"
-                width="32px"
-                height="32px"
-                viewBox="0 0 32 32"
-                version="1.1"
-              >
-                <title>tiktok</title>
-                <path d="M16.656 1.029c1.637-0.025 3.262-0.012 4.886-0.025 0.054 2.031 0.878 3.859 2.189 5.213l-0.002-0.002c1.411 1.271 3.247 2.095 5.271 2.235l0.028 0.002v5.036c-1.912-0.048-3.71-0.489-5.331-1.247l0.082 0.034c-0.784-0.377-1.447-0.764-2.077-1.196l0.052 0.034c-0.012 3.649 0.012 7.298-0.025 10.934-0.103 1.853-0.719 3.543-1.707 4.954l0.020-0.031c-1.652 2.366-4.328 3.919-7.371 4.011l-0.014 0c-0.123 0.006-0.268 0.009-0.414 0.009-1.73 0-3.347-0.482-4.725-1.319l0.040 0.023c-2.508-1.509-4.238-4.091-4.558-7.094l-0.004-0.041c-0.025-0.625-0.037-1.25-0.012-1.862 0.49-4.779 4.494-8.476 9.361-8.476 0.547 0 1.083 0.047 1.604 0.136l-0.056-0.008c0.025 1.849-0.050 3.699-0.050 5.548-0.423-0.153-0.911-0.242-1.42-0.242-1.868 0-3.457 1.194-4.045 2.861l-0.009 0.030c-0.133 0.427-0.21 0.918-0.21 1.426 0 0.206 0.013 0.41 0.037 0.61l-0.002-0.024c0.332 2.046 2.086 3.59 4.201 3.59 0.061 0 0.121-0.001 0.181-0.004l-0.009 0c1.463-0.044 2.733-0.831 3.451-1.994l0.010-0.018c0.267-0.372 0.45-0.822 0.511-1.311l0.001-0.014c0.125-2.237 0.075-4.461 0.087-6.698 0.012-5.036-0.012-10.060 0.025-15.083z" />
-              </svg>
-            </a>
-          </div> */}
 
           <div className="headings mt-[40px] flex flex-col justify-center items-center text-white">
             <div className="heading_title flex flex-col items-center">
@@ -308,7 +395,7 @@ export default function Home() {
             </div>
           )}
 
-          {/*   {aiResponse && (
+          {aiResponse && (
             <div className="response_box w-full text-[#414141]">
               <div className="life_affection">
                 <h3 className="text-[22px] font-semibold">
@@ -326,7 +413,7 @@ export default function Home() {
                 </h3>
                 <h4 className="font-black mt-[20px] text-[20px]">5 billion $USD</h4>
               </div>
-              <div className="divider"></div> 
+              <div className="divider"></div>   */}
               <div className="breakdown">
                 <h3 className="font-semibold text-[22px]">Breakdown:</h3>
                 <p
@@ -339,7 +426,7 @@ export default function Home() {
                 />
               </div>
             </div>
-          )}  */}
+          )}
 
           {aiResponse && (
             <button
@@ -393,35 +480,20 @@ export default function Home() {
                 if (tokens < 1) setPendingSubmit(false);
                 localStorage.removeItem("pendingSubmit");
               }}
-              onBuySuccess={fetchTokens}
+              onBuySuccess={async () => {
+                await fetchTokens();
+                await doSubmit();
+              }}
             /> // Add onBuySuccess prop
           )}
 
+          {showAccount && (
+            <AccountModal onClose={() => setShowAccount(false)} logOut={handleLogOut} />
+          )}
+
           {user && <div>LOGOUT</div>}
-          {/* Token display */}
-          {/* <div className="absolute top-[10px] right-[10px] flex items-center text-white">
-            <span className="mr-[5px]">Tokens:</span>
-            <span className="font-bold">{tokens}</span>
-          </div> */}
         </div>
       </div>
     </div>
   );
 }
-
-// const AuthModal = ({ onClose }) => {
-//   const signIn = async () => {
-//     await supabase.auth.signInWithPassword({ email: 'test@email.com', password: 'pass' }); // Replace with form
-//     onClose();
-//   };
-
-//   return (
-//     <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-[20px]">
-//       <div className="bg-white rounded-[15px] max-w-[500px] w-full p-[20px]">
-//         <h2 className="font-bold text-[24px] text-center">Log In or Sign Up</h2>
-//         <button onClick={signIn} className="w-full p-[10px] bg-blue-500 text-white rounded-[10px] mt-[20px]">Log In</button>
-//         <button onClick={onClose} className="w-full text-[#414141] text-[15px] underline mt-[10px]">Cancel</button>
-//       </div>
-//     </div>
-//   );
-// };
