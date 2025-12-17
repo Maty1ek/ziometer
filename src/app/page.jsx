@@ -3,11 +3,7 @@ import Image from "next/image";
 import bgCircles from "../../public/bg_circles.svg";
 import {
   CircleUserRound,
-  Instagram,
-  InstagramIcon,
-  Menu,
   Plus,
-  X,
   XIcon,
   Zap,
 } from "lucide-react";
@@ -15,7 +11,6 @@ import MainInputs from "@/components/main-inputs";
 import BuyModal from "@/components/BuyModal";
 import { useState, useEffect } from "react";
 import { submitToGrok } from "@/app/actions/submitToGrok";
-import { marked } from "marked";
 import { SignUpForm } from "@/components/sign-up-form";
 import { LoginForm } from "@/components/login-form";
 import { ForgotPasswordForm } from "@/components/forgot-password-form";
@@ -23,7 +18,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import AccountModal from "@/components/AccountModal";
 import ConfirmDelete from "@/components/ConfirmDelete";
 import { supabaseClient } from "@/lib/supabaseClient";
-import DOMPurify from "dompurify";
 
 export default function Home() {
   const searchParams = useSearchParams(); // HOOK FOR URL PARAMS
@@ -47,7 +41,6 @@ export default function Home() {
   const [pendingSubmit, setPendingSubmit] = useState(false);
   const [isFetchingTokens, setIsFetchingTokens] = useState(false);
 
-  // NEW: Add loading state for initial session check
   const [authLoading, setAuthLoading] = useState(true);
 
   const [isPollingPayment, setIsPollingPayment] = useState(false);
@@ -61,7 +54,6 @@ export default function Home() {
         setPendingSubmit(true);
       }
 
-      // Clean the URL without refreshing the page
       router.replace("/");
     }
   }, [searchParams, router]);
@@ -173,11 +165,7 @@ export default function Home() {
 
       const { tokens: userTokens } = await response.json();
       setTokens(userTokens);
-      // if (!error) {
-      //   setTokens(data?.tokens ?? 0);
-      // } else {
-      //   console.error("Token fetch error:", error);
-      // }
+
     } finally {
       isDeduct ? "" : setIsFetchingTokens(false);
     }
@@ -382,7 +370,6 @@ export default function Home() {
                 user ? setShowBuy(true) : setShowLogin(true);
               }}
             >
-              {/* <Menu size={36} /> */}
               <div className="flex text-[30px] cursor-pointer items-center justify-center bg-[#ffffff76] rounded-[30px] h-[48px] w-[90px]">
                 <Zap size={30} className="mr-[4px]" /> {tokens}
               </div>
@@ -462,14 +449,6 @@ export default function Home() {
                 </h3>
               </div>
               <div className="divider"></div>
-              {/* <div className="money_spent text-[18px]">
-                <h3 className=" font-semibold">
-                  Total amount of money sent to Israel in your lifespan by your
-                  residences:
-                </h3>
-                <h4 className="font-black mt-[20px] text-[20px]">5 billion $USD</h4>
-              </div>
-              <div className="divider"></div>   */}
               <div className="breakdown">
                 <h3 className="font-semibold text-[22px]">Breakdown:</h3>
                 <div className="prose prose-sm mt-[10px] text-[#414141]">
@@ -487,7 +466,6 @@ export default function Home() {
           {aiResponse && (
             <button
               onClick={() => setAiResponse(null)}
-              // disabled={isLoading}
               className="submit_button flex items-center justify-center mt-[30px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               USE AGAIN{" "}
@@ -533,8 +511,6 @@ export default function Home() {
               user={user}
               onClose={() => {
                 setShowBuy(false);
-                // if (tokens < 1) setPendingSubmit(false);
-                // localStorage.removeItem("pendingSubmit");
               }}
               onBuySuccess={async () => {
                 await fetchTokens();
