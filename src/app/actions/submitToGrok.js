@@ -58,7 +58,7 @@ export async function submitToGrok(countries) {
           { role: "user", content: userContent },
         ],
         temperature: 0.9, // Adjustable: lower for more deterministic, higher for creative
-        max_tokens: 2524, // Limit response length
+        max_tokens: 5524, // Limit response length
         stream: false,
       }),
       // Note: fetch doesn't have built-in timeout; use AbortController for production if needed
