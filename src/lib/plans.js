@@ -20,7 +20,7 @@ export const PLANS = {
   },
   test: {
     id: process.env.WHOP_TEST_PRODUCT_ID,
-    price: '$10',
+    price: '$8',
     tokens: 50,
     desc: 'test plan',
   },
