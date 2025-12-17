@@ -1,27 +1,23 @@
 "use client";
 import Image from "next/image";
 import bgCircles from "../../public/bg_circles.svg";
-import {
-  CircleUserRound,
-  Plus,
-  XIcon,
-  Zap,
-} from "lucide-react";
+import { CircleUserRound, Plus, XIcon, Zap } from "lucide-react";
 import MainInputs from "@/components/main-inputs";
 import BuyModal from "@/components/BuyModal";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { submitToGrok } from "@/app/actions/submitToGrok";
 import { SignUpForm } from "@/components/sign-up-form";
 import { LoginForm } from "@/components/login-form";
 import { ForgotPasswordForm } from "@/components/forgot-password-form";
-import { useRouter, useSearchParams } from "next/navigation";
+// import { useRouter } from "next/navigation";
 import AccountModal from "@/components/AccountModal";
 import ConfirmDelete from "@/components/ConfirmDelete";
 import { supabaseClient } from "@/lib/supabaseClient";
+import SearchParamsHandler from "@/components/SearchParamsHandler";
 
 export default function Home() {
-  const searchParams = useSearchParams(); // HOOK FOR URL PARAMS
-  const router = useRouter();
+  // const searchParams = useSearchParams(); // HOOK FOR URL PARAMS
+  // const router = useRouter();
 
   const [countries, setCountries] = useState([{ country: "", years: "" }]);
   const [isLoading, setIsLoading] = useState(false);
@@ -45,18 +41,18 @@ export default function Home() {
 
   const [isPollingPayment, setIsPollingPayment] = useState(false);
 
-  useEffect(() => {
-    if (searchParams.get("payment") === "success") {
-      setIsPollingPayment(true);
+  // useEffect(() => {
+  //   if (searchParams.get("payment") === "success") {
+  //     setIsPollingPayment(true);
 
-      const savedPending = localStorage.getItem("pendingSubmit");
-      if (savedPending === "false") {
-        setPendingSubmit(true);
-      }
+  //     const savedPending = localStorage.getItem("pendingSubmit");
+  //     if (savedPending === "false") {
+  //       setPendingSubmit(true);
+  //     }
 
-      router.replace("/");
-    }
-  }, [searchParams, router]);
+  //     router.replace("/");
+  //   }
+  // }, [searchParams, router]);
 
   useEffect(() => {
     let intervalId;
@@ -165,7 +161,6 @@ export default function Home() {
 
       const { tokens: userTokens } = await response.json();
       setTokens(userTokens);
-
     } finally {
       isDeduct ? "" : setIsFetchingTokens(false);
     }
@@ -350,6 +345,18 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen flex justify-center pt-[15px]">
+      <Suspense>
+        <SearchParamsHandler
+          onPaymentSuccess={() => {
+            setIsPollingPayment(true);
+
+            const savedPending = localStorage.getItem("pendingSubmit");
+            if (savedPending === "false") {
+              setPendingSubmit(true);
+            }
+          }}
+        ></SearchParamsHandler>
+      </Suspense>
       <div className="bg_circles absolute flex justify-center top-[-15px] w-full overflow-hidden">
         <div className="min-w-[760px]">
           <Image
