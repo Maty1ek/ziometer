@@ -21,47 +21,11 @@ export default function BuyModal({ user, onClose, onBuySuccess }) {
     setLoadingPlan(planKey);
 
     try {
-      // We pass 'starter', 'explorer', etc.
-      const plan = PLANS[planKey];
-      const metadata = {
-        user_id: user.id,
-        tokens: plan.tokens.toString(),
-      };
-
-
-      // Simulate webhook call with fake payload
-      const response = await fetch('/api/whop-webhook', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          type: 'payment.succeeded',
-          data: {
-            checkout_configuration: {
-              metadata,
-            },
-          },
-        }),
-      });
-      console.log(response, 'lop');
-      router.push(`/?payment=success`)
-      
-
-      if (!response.ok) {
-        throw new Error('Webhook simulation failed');
-      }
-
-      // Optional: Simulate setting sessionId if needed (but not used here)
-      // setSessionId('simulated-id');
-
-      // Close modal or show success
-      // onClose();
-      // onBuySuccess()
-      // const checkoutUrl = await createWhopCheckout(planKey, user.id);
+     
+      const checkoutUrl = await createWhopCheckout(planKey);
 
       // Redirect user to Whop
-      // window.location.href = checkoutUrl; // Redirect to Whop checkout
+      window.location.href = checkoutUrl; // Redirect to Whop checkout
       // setSessionId(id);
     } catch (err) {
       console.error("Checkout error:", err);

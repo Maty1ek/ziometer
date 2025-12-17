@@ -41,10 +41,9 @@ export function LoginForm({
         },
       })
 
-      console.log(bigData,);
       
 
-      if (error) throw error
+      if (data.error) throw error
 
       // if (data.session) {
         // Immediate session (rare if confirmation enabled)

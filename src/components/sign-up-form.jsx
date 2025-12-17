@@ -39,7 +39,6 @@ export function SignUpForm({ className, ...props }) {
         },
       });
 
-      console.log('hello', data);
       
 
       if (error) throw error;
@@ -80,13 +79,11 @@ export function SignUpForm({ className, ...props }) {
           emailRedirectTo: `${window.location.origin}/`,
         },
       });
-      console.log('hello', data);
 
 
-      if (error) throw error;
+      if (data.error) throw error;
 
       const dataSD = await supabase.auth.getSession();
-      console.log(dataSD, 'IOIOIO');
       
       props.onClose();
 

@@ -1,15 +1,17 @@
 "use server";
 
+import { deductToken } from "@/lib/deduct-token";
 import { SYSTEM_PROMPT } from "@/lib/prompt";
 import { createClient } from "@/lib/supabase/server";
-import { supabase } from "@/lib/supabaseServer"; // Import server client for token ops
 
 // CHANGED: Removed userId param – now fetched securely from session
 export async function submitToGrok(countries) {
   const supabase = await createClient();
 
   // NEW: Fetch authenticated user from session (ensures security and persistence)
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session?.user) throw new Error("Unauthorized – no active session");
   const userId = session.user.id;
 
@@ -82,6 +84,8 @@ export async function submitToGrok(countries) {
     //   .from("user_tokens")
     //   .update({ tokens: tokenRow.tokens - 1 })
     //   .eq("user_id", userId);
+    const { error: deductError } = await supabase.rpc("deduct_user_token", { uid: userId });
+  if (deductError) throw new Error(`Insufficient tokens: ${deductError.message}`);
 
     // if (updateError) throw new Error("Failed to deduct token");
 

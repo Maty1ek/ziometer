@@ -7,6 +7,7 @@ import {
   InstagramIcon,
   Menu,
   Plus,
+  X,
   XIcon,
   Zap,
 } from "lucide-react";
@@ -14,19 +15,15 @@ import MainInputs from "@/components/main-inputs";
 import BuyModal from "@/components/BuyModal";
 import { useState, useEffect } from "react";
 import { submitToGrok } from "@/app/actions/submitToGrok";
-import { createClient } from "@supabase/supabase-js";
 import { marked } from "marked";
 import { SignUpForm } from "@/components/sign-up-form";
 import { LoginForm } from "@/components/login-form";
 import { ForgotPasswordForm } from "@/components/forgot-password-form";
-import { deductToken } from "@/lib/deduct-token";
 import { useRouter, useSearchParams } from "next/navigation";
 import AccountModal from "@/components/AccountModal";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY
-);
+import ConfirmDelete from "@/components/ConfirmDelete";
+import { supabaseClient } from "@/lib/supabaseClient";
+import DOMPurify from "dompurify";
 
 export default function Home() {
   const searchParams = useSearchParams(); // HOOK FOR URL PARAMS
@@ -43,7 +40,7 @@ export default function Home() {
   const [resetPassword, setResetPassword] = useState(false);
   const [showBuy, setShowBuy] = useState(false);
   const [warning, setWarning] = useState(false);
-  const [isToken, setIsToken] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const [showAccount, setShowAccount] = useState(false);
 
@@ -58,6 +55,12 @@ export default function Home() {
   useEffect(() => {
     if (searchParams.get("payment") === "success") {
       setIsPollingPayment(true);
+
+      const savedPending = localStorage.getItem("pendingSubmit");
+      if (savedPending === "false") {
+        setPendingSubmit(true);
+      }
+
       // Clean the URL without refreshing the page
       router.replace("/");
     }
@@ -69,17 +72,23 @@ export default function Home() {
     if (isPollingPayment && user) {
       console.log("Polling for tokens started...");
 
-      // Initial quick check
       const checkTokens = async () => {
-        console.log("oioioioi");
+        // Initial quick check
+        const response = await fetch("/api/tokens/getTokens", {
+          method: "GET",
+          credentials: "include", // Important for cookies
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
 
-        const { data } = await supabase
-          .from("user_tokens")
-          .select("tokens")
-          .eq("user_id", user.id)
-          .single();
+        if (!response.ok) {
+          throw new Error("Failed to fetch tokens");
+        }
 
-        const currentTokens = data?.tokens ?? 0;
+        const { tokens: userTokens } = await response.json();
+
+        const currentTokens = userTokens ?? 0;
 
         if (currentTokens > 0) {
           setTokens(currentTokens);
@@ -121,14 +130,11 @@ export default function Home() {
 
     fetchSession();
 
-    console.log(user, "ses2");
-
     // Set up auth state change listener
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabaseClient.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      console.log(session, user, "ses3");
     });
 
     // Cleanup listener on unmount
@@ -153,16 +159,25 @@ export default function Home() {
     if (!user) return;
     isDeduct ? "" : setIsFetchingTokens(true);
     try {
-      const { data, error } = await supabase
-        .from("user_tokens")
-        .select("tokens")
-        .eq("user_id", user.id)
-        .single();
-      if (!error) {
-        setTokens(data?.tokens ?? 0);
-      } else {
-        console.error("Token fetch error:", error);
+      const response = await fetch("/api/tokens/getTokens", {
+        method: "GET",
+        credentials: "include", // Important for cookies
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch tokens");
       }
+
+      const { tokens: userTokens } = await response.json();
+      setTokens(userTokens);
+      // if (!error) {
+      //   setTokens(data?.tokens ?? 0);
+      // } else {
+      //   console.error("Token fetch error:", error);
+      // }
     } finally {
       isDeduct ? "" : setIsFetchingTokens(false);
     }
@@ -220,7 +235,7 @@ export default function Home() {
       setPendingSubmit(false);
 
       // 4. Deduct Token
-      await deductToken(user, fetchTokens);
+      response && (await fetchTokens(true));
     } catch (err) {
       if (err.message && err.message.includes("Unauthorized")) {
         setUser(null);
@@ -255,7 +270,6 @@ export default function Home() {
     }
 
     setPendingSubmit(true);
-    console.log(pendingSubmit);
 
     if (!user) {
       setShowAuth(true);
@@ -271,31 +285,71 @@ export default function Home() {
   };
 
   const handleLogOut = async () => {
-  try {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error("Logout error:", error);
-      setError("Failed to log out. Please try again.");
-      return;
+    try {
+      const response = await fetch("/api/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        console.error("Logout error:", data.error || "Server error");
+        setError("Failed to log out. Please try again.");
+        return;
+      }
+
+      // Clear local state
+      setTokens(0);
+      setAiResponse(null);
+      setWarning(false);
+      setError(null);
+      localStorage.removeItem("pendingCountries");
+
+      // Close modal first
+      setShowAccount(false);
+
+      // Force full reload — most reliable in App Router to clear server cache
+      window.location.href = "/";
+    } catch (err) {
+      console.error("Unexpected logout error:", err);
+      setError("Logout failed.");
     }
+  };
 
-    // Clear local state
-    setTokens(0);
-    setAiResponse(null);
-    setWarning(false);
-    setError(null);
-    localStorage.removeItem("pendingCountries");
+  const handleDeleteAccount = async () => {
+    try {
+      const response = await fetch("/api/supa/auth/delete", {
+        method: "POST",
+      });
 
-    // Close modal first
-    setShowAccount(false);
+      const data = await response.json();
 
-    // Force full reload — most reliable in App Router to clear server cache
-    window.location.href = "/";
-  } catch (err) {
-    console.error("Unexpected logout error:", err);
-    setError("Logout failed.");
-  }
-};
+      if (!response.ok || data.error) {
+        console.error("Delete error:", data.error || "Server error");
+        setError("Failed to delete account. Please try again.");
+        return;
+      }
+
+      // Clear local state
+      setTokens(0);
+      setAiResponse(null);
+      setWarning(false);
+      setError(null);
+      localStorage.removeItem("pendingCountries");
+
+      // Close modal first
+      setShowAccount(false);
+
+      // Force full reload — most reliable in App Router to clear server cache
+      window.location.href = "/";
+    } catch (err) {
+      console.error("Unexpected delete error:", err);
+      setError("Deleting failed.");
+    }
+  };
 
   // NEW: Show loading UI during initial auth check
   if (authLoading) {
@@ -324,7 +378,9 @@ export default function Home() {
           <div className="heading_buttons w-full px-[0px] flex justify-between text-[#414141]">
             <div
               className="burger_button flex items-center gap-[10px]"
-              onClick={() => setShowBuy(true)}
+              onClick={() => {
+                user ? setShowBuy(true) : setShowLogin(true);
+              }}
             >
               {/* <Menu size={36} /> */}
               <div className="flex text-[30px] cursor-pointer items-center justify-center bg-[#ffffff76] rounded-[30px] h-[48px] w-[90px]">
@@ -416,14 +472,14 @@ export default function Home() {
               <div className="divider"></div>   */}
               <div className="breakdown">
                 <h3 className="font-semibold text-[22px]">Breakdown:</h3>
-                <p
-                  className="prose prose-sm mt-[10px]"
-                  dangerouslySetInnerHTML={{
-                    __html: marked.parse(
-                      JSON.parse(aiResponse).breakdownMD || ""
-                    ),
-                  }}
-                />
+                <div className="prose prose-sm mt-[10px] text-[#414141]">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]} // Optional: enables tables, task lists, etc.
+                    rehypePlugins={[rehypeSanitize]} // Critical for extra safety
+                  >
+                    {JSON.parse(aiResponse).breakdownMD || ""}
+                  </ReactMarkdown>
+                </div>
               </div>
             </div>
           )}
@@ -477,8 +533,8 @@ export default function Home() {
               user={user}
               onClose={() => {
                 setShowBuy(false);
-                if (tokens < 1) setPendingSubmit(false);
-                localStorage.removeItem("pendingSubmit");
+                // if (tokens < 1) setPendingSubmit(false);
+                // localStorage.removeItem("pendingSubmit");
               }}
               onBuySuccess={async () => {
                 await fetchTokens();
@@ -487,11 +543,34 @@ export default function Home() {
             /> // Add onBuySuccess prop
           )}
 
-          {showAccount && (
-            <AccountModal onClose={() => setShowAccount(false)} logOut={handleLogOut} />
+          {showAccount && user ? (
+            <AccountModal
+              onClose={() => setShowAccount(false)}
+              logOut={handleLogOut}
+              user={user}
+              onDelete={() => setConfirmDelete(true)}
+            />
+          ) : showAccount && !user ? (
+            <LoginForm
+              onAuth={() => setShowAuth(true)}
+              onClose={() => {
+                setShowLogin(false);
+                setShowAccount(false);
+                if (!user) setPendingSubmit(false);
+                localStorage.removeItem("pendingSubmit");
+              }}
+              onReset={() => setResetPassword(true)}
+            />
+          ) : (
+            ""
           )}
 
-          {user && <div>LOGOUT</div>}
+          {confirmDelete && (
+            <ConfirmDelete
+              onAccDelete={handleDeleteAccount}
+              onClose={() => setConfirmDelete(false)}
+            />
+          )}
         </div>
       </div>
     </div>
