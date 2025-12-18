@@ -18,10 +18,10 @@ export const PLANS = {
     tokens: 30,
     desc: 'Best value – never run out',
   },
-  test: {
-    id: process.env.WHOP_TEST_PRODUCT_ID,
-    price: '$8',
-    tokens: 50,
-    desc: 'test plan',
-  },
+  // test: {
+  //   id: process.env.WHOP_TEST_PRODUCT_ID,
+  //   price: '$8',
+  //   tokens: 50,
+  //   desc: 'test plan',
+  // },
 };
