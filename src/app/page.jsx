@@ -1,7 +1,8 @@
 "use client";
 import Image from "next/image";
 import bgCircles from "../../public/bg_circles.svg";
-import { CircleUserRound, Plus, XIcon, Zap } from "lucide-react";
+import xLogo from "../../public/twitter_icon.webp";
+import { CircleUserRound, Plus, Twitter, XIcon, Zap } from "lucide-react";
 import MainInputs from "@/components/main-inputs";
 import BuyModal from "@/components/BuyModal";
 import { useState, useEffect, Suspense } from "react";
@@ -17,7 +18,6 @@ import SearchParamsHandler from "@/components/SearchParamsHandler";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
-
 
 export default function Home() {
   // const searchParams = useSearchParams(); // HOOK FOR URL PARAMS
@@ -240,7 +240,7 @@ export default function Home() {
 
   const handleSubmit = async () => {
     const validCountries = countries.filter(
-      (row) => row.country.trim() && row.years.trim()
+      (row) => row.country.trim() && row.years.trim(),
     );
     if (validCountries.length === 0) {
       setError("Please enter at least one country and years.");
@@ -354,10 +354,10 @@ export default function Home() {
           onPaymentSuccess={() => {
             setIsPollingPayment(true);
 
-            const savedPending = localStorage.getItem("pendingSubmit");
-            if (savedPending === "false") {
-              setPendingSubmit(true);
-            }
+            // const savedPending = localStorage.getItem("pendingSubmit");
+            // if (savedPending === "false") {
+            //   setPendingSubmit(true);
+            // }
           }}
         ></SearchParamsHandler>
       </Suspense>
@@ -558,6 +558,16 @@ export default function Home() {
               onClose={() => setConfirmDelete(false)}
             />
           )}
+          <div className="socials mt-[50px] flex flex-col items-center gap-[8px] w-[300px] bg-[#ffffff76] px-[20px] pb-[10px] rounded-[10px]">
+            <h2 className="socials_text text-[30px] font-semibold text-[#050505]">
+              Socials
+            </h2>
+            <div className="socials_icons flex gap-[26px] text-[#fff] ">
+              <a href="">
+                <Image src={xLogo} width={32} height={32} />
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -49,7 +49,7 @@ export function LoginForm({
         // Immediate session (rare if confirmation enabled)
         await supabase.auth.getSession(); 
         // await supabase.auth.refreshSession()// Refresh to trigger listener
-        props.onClose();
+        // props.onClose();
       // } else {
       //   // Confirmation pending – show UI message
       //   setError("Check your email to confirm signup!"); // Or use a success toast/state

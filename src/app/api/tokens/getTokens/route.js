@@ -5,13 +5,13 @@ import { NextResponse } from 'next/server';
 
 
 export async function GET(request) {
-    const supabaseAdmin = createClient()
+    const supabaseAdmin = await createClient()
 
   const { data: {session}, error: authError } = await supabaseAdmin.auth.getSession();
 
   const user = session.user
 
-  console.log(session, authError,'lolipop');
+  // console.log(session, authError,'lolipop');
   
 
   if (authError || !session.user) {
@@ -23,6 +23,9 @@ export async function GET(request) {
     .select('tokens')
     .eq('user_id', session.user.id)
     .single();
+
+    console.log(data, data.tokens,'get01');
+    
 
   if (error) {
     console.error('Token fetch error:', error);

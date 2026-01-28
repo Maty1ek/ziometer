@@ -46,7 +46,7 @@ export function SignUpForm({ className, ...props }) {
       // if (data.session) {
         // Immediate session (rare if confirmation enabled)
         await supabase.auth.getSession(); 
-        props.onClose();
+        // props.onClose();
       // } else {
       //   // Confirmation pending – show UI message
       //   setError("Check your email to confirm signup!"); // Or use a success toast/state
