@@ -61,7 +61,7 @@ export default function BuyModal({ user, onClose, onBuySuccess }) {
           >
             <div className="flex justify-between items-center">
               <span className="font-bold text-[18px]">
-                {p.price} – {p.tokens*2} tokens
+                {p.price} – {p.tokens} tokens
               </span>
               {loadingPlan === key && (
                 <span className="text-xs text-blue-500 animate-pulse">

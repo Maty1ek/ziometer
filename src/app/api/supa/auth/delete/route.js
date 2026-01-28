@@ -9,6 +9,7 @@ export async function POST() {
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  console.log(user.id, 'userid');
     const { error: cleanupError } = await supabase
       .from('user_tokens') // replace with your actual table name
       .delete()
@@ -16,9 +17,14 @@ export async function POST() {
 
     if (cleanupError) {
       console.error('Cleanup error:', cleanupError);
+  console.log(cleanupError, 'errorlol');
+
       // Decide if you want to fail the whole deletion or continue
     }
+    
     const { error: deleteError } = await supabase.auth.admin.deleteUser(user.id);
+  console.log(deleteError, 'errorlol2');
+
 
     if (deleteError) {
       console.error('Supabase admin delete error:', deleteError);
