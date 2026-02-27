@@ -1,36 +1,12 @@
 "use server";
 
-import { deductToken } from "@/lib/deduct-token";
+// import { deductToken } from "@/lib/deduct-token";
 import { SYSTEM_PROMPT } from "@/lib/prompt";
-import { createClient } from "@/lib/supabase/server";
+// import { createClient } from "@/lib/supabase/server";
 
 // CHANGED: Removed userId param – now fetched securely from session
 export async function submitToGrok(countries) {
-  const supabase = await createClient();
 
-  // NEW: Fetch authenticated user from session (ensures security and persistence)
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.user) throw new Error("Unauthorized – no active session");
-  const userId = session.user.id;
-
-  // Verify user and tokens
-  const { data: tokenRow, error: profileError } = await supabase
-    .from("user_tokens")
-    .select("tokens")
-    .eq("user_id", userId)
-    .single();
-
-  if (profileError)
-    throw new Error(`Token fetch error: ${profileError.message}`);
-  const tokens = tokenRow?.tokens ?? 0;
-  if (tokens < 1) throw new Error("Insufficient tokens – 1 token required");
-
-  // Error check: Validate input countries
-  if (!Array.isArray(countries) || countries.length === 0) {
-    throw new Error("Invalid countries input – must be a non-empty array");
-  }
 
   // Format the user message from countries data (unchanged)
   const userContent = `The user has lived in the following countries:\n${countries
@@ -78,17 +54,6 @@ export async function submitToGrok(countries) {
     if (!aiContent) {
       throw new Error("No content received from Grok API.");
     }
-
-    // Token deduction after successful API call (new – server-side update)
-    // const { error: updateError } = await supabase
-    //   .from("user_tokens")
-    //   .update({ tokens: tokenRow.tokens - 1 })
-    //   .eq("user_id", userId);
-    const { error: deductError } = await supabase.rpc("deduct_user_token", { uid: userId });
-  if (deductError) throw new Error(`Insufficient tokens: ${deductError.message}`);
-
-    // if (updateError) throw new Error("Failed to deduct token");
-
     return aiContent;
   } catch (err) {
     console.error("Grok API error:", err);
