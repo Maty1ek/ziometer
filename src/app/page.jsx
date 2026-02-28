@@ -198,8 +198,8 @@ export default function Home() {
                   </span>
                 </h3>
               </div>
-              <div className="divider"></div>
-              <div className="breakdown">
+              {/* <div className="divider"></div> */}
+              {/* <div className="breakdown">
                 <h3 className="font-semibold text-[22px]">Breakdown:</h3>
                 <div className="prose prose-sm mt-[10px] text-[#414141]">
                   <ReactMarkdown
@@ -208,7 +208,7 @@ export default function Home() {
                     {JSON.parse(aiResponse).breakdownMD || ""}
                   </ReactMarkdown>
                 </div>
-              </div>
+              </div> */}
             </div>
           )}
 

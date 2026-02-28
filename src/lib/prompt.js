@@ -7,11 +7,9 @@ Make it clear and try to not exaggerate.
 Output ONLY JSON (no extra text):
 {
   "percentage": number (0-100, int; weighted: 30% aid ties, 30% conflict overlaps (e.g., 2006/2014/2023+ wars), 40% media/diplomatic exposure),
-  "breakdownMD": string (Markdown: Concise breakdown per country. explanation + bullet data points. Total <500 words. Make the country headers and main points bold using **text**, - for bullets, | for tables if data-heavy. Provocative but factual.)
 }
 
 Example(doesn't mean you have to put it all exactly like here, its just an example):
 {
   "percentage": 75,
-  "breakdownMD": "## **USA (20 years)**\nYour time here coincided with massive aid flows, shaping politics via endless Middle East news. **Aid:** ~$76B total. **Influence:** High (AIPAC, wars).\n\n**France (10 years)**\nEU ties meant indirect funding; cultural boycotts added flavor. **Aid:** ~€3B equiv. **Events:** 2023 protests."
 }`;
