@@ -4,10 +4,41 @@
 import { SYSTEM_PROMPT } from "@/lib/prompt";
 // import { createClient } from "@/lib/supabase/server";
 
+// Helper function for retries with exponential backoff
+async function fetchWithRetry(url, options, maxRetries = 3, initialBackoff = 1000) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        const status = response.status;
+        if ([429, 502, 503].includes(status) && attempt < maxRetries - 1) {
+          // Exponential backoff: wait 1s, then 2s, then 4s, etc.
+          const backoffTime = initialBackoff * Math.pow(2, attempt);
+          console.warn(`API error ${status} - Retrying after ${backoffTime}ms...`);
+          await new Promise(resolve => setTimeout(resolve, backoffTime));
+          continue;
+        }
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error?.message ||
+          `API request failed with status ${status}`
+        );
+      }
+      return response;
+    } catch (err) {
+      if (attempt === maxRetries - 1) {
+        throw err; // Rethrow after all retries fail
+      }
+      // Backoff on network errors too
+      const backoffTime = initialBackoff * Math.pow(2, attempt);
+      console.error(`Network error - Retrying after ${backoffTime}ms:`, err);
+      await new Promise(resolve => setTimeout(resolve, backoffTime));
+    }
+  }
+}
+
 // CHANGED: Removed userId param – now fetched securely from session
 export async function submitToGrok(countries) {
-
-
   // Format the user message from countries data (unchanged)
   const userContent = `The user has lived in the following countries:\n${countries
     .map((row) => `- ${row.country} for ${row.years} years`)
@@ -21,32 +52,23 @@ export async function submitToGrok(countries) {
   }
 
   try {
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    const response = await fetchWithRetry("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "grok-4-fast-reasoning", // Use 'grok-4' if available via your plan; check xAI docs for latest models
+        model: "grok-4-fast-reasoning", // Confirm this model is available in your tier
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userContent },
         ],
-        temperature: 0.9, // Adjustable: lower for more deterministic, higher for creative
-        max_tokens: 1024, // Limit response length
+        temperature: 0.9,
+        max_tokens: 1024,
         stream: false,
       }),
-      // Note: fetch doesn't have built-in timeout; use AbortController for production if needed
     });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(
-        errorData.error?.message ||
-          `API request failed with status ${response.status}`
-      );
-    }
 
     const data = await response.json();
     const aiContent = data.choices?.[0]?.message?.content;
@@ -57,6 +79,6 @@ export async function submitToGrok(countries) {
     return aiContent;
   } catch (err) {
     console.error("Grok API error:", err);
-    throw err; // Rethrow to handle in client
+    throw err; // Rethrow to handle in client (e.g., show a user-friendly message)
   }
 }

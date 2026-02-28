@@ -198,17 +198,28 @@ export default function Home() {
                   </span>
                 </h3>
               </div>
-              {/* <div className="divider"></div> */}
-              {/* <div className="breakdown">
+              <div className="divider"></div>
+              <div className="breakdown">
                 <h3 className="font-semibold text-[22px]">Breakdown:</h3>
-                <div className="prose prose-sm mt-[10px] text-[#414141]">
+                <p className="font-medium text-[#6f6f6f] mt-[10px]">
+                  Breakdown is currently not available cuz im broke to afford AI
+                  tokens. Support project to get the breakdown in the future.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowDonate(true)}
+                  className="submit_button flex items-center justify-center mt-[30px] text-[#0f0f0f] text-[24px] font-bold w-full rounded-[14px] bg-white h-[45px]"
+                >
+                  Support Us (50% for 🇵🇸)
+                </button>
+                {/* <div className="prose prose-sm mt-[10px] text-[#414141]">
                   <ReactMarkdown
                     rehypePlugins={[rehypeSanitize]} // Critical for extra safety
                   >
                     {JSON.parse(aiResponse).breakdownMD || ""}
                   </ReactMarkdown>
-                </div>
-              </div> */}
+                </div> */}
+              </div>
             </div>
           )}
 
@@ -225,9 +236,7 @@ export default function Home() {
           )}
         </div>
       </div>
-      {showDonate && (
-        <DonateWindow onClose={() => setShowDonate(false)} />
-      )}
+      {showDonate && <DonateWindow onClose={() => setShowDonate(false)} />}
     </div>
   );
 }
