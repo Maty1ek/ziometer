@@ -1,11 +1,11 @@
 "use client";
 import Image from "next/image";
 import bgCircles from "../../public/bg_circles.svg";
-import { CircleUserRound, Instagram, Plus, XIcon, Zap } from "lucide-react";
+import { CircleUserRound, Instagram, Share2, Plus, XIcon, Zap } from "lucide-react";
 import MainInputs from "@/components/main-inputs";
 import BuyModal from "@/components/BuyModal";
 import DonateWindow from "@/components/DonateWindow";
-import { useState, useEffect, Suspense } from "react";
+import { useMemo, useState, useEffect, Suspense } from "react";
 import { submitToGrok } from "@/app/actions/submitToGrok";
 // import { SignUpForm } from "@/components/sign-up-form";
 // import { LoginForm } from "@/components/login-form";
@@ -20,6 +20,7 @@ import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 import tiktok from "../../public/tiktok_icon.svg";
 import twitter from "../../public/twitter_icon.webp";
+import ShareResultsModal from "@/components/ShareResultsModal";
 
 export default function Home() {
   // const searchParams = useSearchParams(); // HOOK FOR URL PARAMS
@@ -39,8 +40,18 @@ export default function Home() {
   const [resetPassword, setResetPassword] = useState(false);
   const [showBuy, setShowBuy] = useState(false);
   const [showDonate, setShowDonate] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const [warning, setWarning] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const parsed = useMemo(() => {
+    if (!aiResponse) return null;
+    try {
+      return JSON.parse(aiResponse);
+    } catch {
+      return null;
+    }
+  }, [aiResponse]);
 
   const doSubmit = async () => {
     if (isLoading) return; // Prevent double clicks
@@ -79,8 +90,6 @@ export default function Home() {
   };
 
   // NEW: Show loading UI during initial auth check
-
-  console.log(user, "ko");
 
   return (
     <div className="relative min-h-screen flex justify-center pt-[5px]">
@@ -204,31 +213,30 @@ export default function Home() {
                 <h3 className="text-[22px] font-semibold">
                   Your life has been affected by Israel for:{" "}
                   <span className="font-black">
-                    {JSON.parse(aiResponse).percentage}%
+                    {parsed?.percentage ?? "--"}%
                   </span>
                 </h3>
               </div>
               <div className="divider"></div>
               <div className="breakdown">
                 <h3 className="font-semibold text-[22px]">Breakdown:</h3>
-                {/* <p className="font-medium text-[#6f6f6f] mt-[10px]">
-                  Breakdown is currently not available cuz im broke to afford AI
-                  tokens. Support project to get the breakdown in the future.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setShowDonate(true)}
-                  className="submit_button flex items-center justify-center mt-[30px] text-[#0f0f0f] text-[24px] font-bold w-full rounded-[14px] bg-white h-[45px]"
-                >
-                  Support Us (50% for 🇵🇸)
-                </button> */}
                 <div className="prose prose-sm mt-[10px] text-[#414141]">
-                  <ReactMarkdown
-                    rehypePlugins={[rehypeSanitize]} // Critical for extra safety
-                  >
-                    {JSON.parse(aiResponse).breakdownMD || ""}
+                  <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
+                    {parsed?.breakdownMD || ""}
                   </ReactMarkdown>
                 </div>
+              </div>
+
+              <div className="mt-[14px]">
+                <button
+                  type="button"
+                  onClick={() => setShowShare(true)}
+                  className="h-[40px] w-full rounded-[14px] font-black text-[18px] text-white shadow-sm hover:shadow-md hover:-translate-y-[1px] transition flex items-center justify-center gap-[10px] bg-gradient-to-r from-[#2563eb] to-[#4f46e5]"
+                  aria-label="Share results"
+                >
+                  <Share2 size={18} />
+                  Share Results
+                </button>
               </div>
             </div>
           )}
@@ -256,6 +264,17 @@ export default function Home() {
         </div>
       </div>
       {showDonate && <DonateWindow onClose={() => setShowDonate(false)} />}
+      {showShare && (
+        <ShareResultsModal
+          open={showShare}
+          onClose={() => setShowShare(false)}
+          percentage={parsed?.percentage ?? ""}
+          onSupport={() => {
+            setShowShare(false);
+            setShowDonate(true);
+          }}
+        />
+      )}
     </div>
   );
 }
