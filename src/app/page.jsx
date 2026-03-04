@@ -54,6 +54,7 @@ export default function Home() {
       const response = await submitToGrok(countries);
       setAiResponse(response); // Mock response
       setWarning(true);
+      setShowDonate(true);
     } catch (err) {
       setError(err.message || "Error processing request.");
       console.log(err.message);
@@ -154,22 +155,31 @@ export default function Home() {
           )}
 
           {!aiResponse && (
-            <button
-              onClick={handleSubmit}
-              disabled={isLoading}
-              className="submit_button mt-[30px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                "Processing..."
-              ) : (
-                <span className="flex items-center justify-center">
-                  SUBMIT{" "}
-                  {/* <span className="ml-[15px] flex items-center font-semibold">
-                    <Zap className="mr-[2px]" />1
-                  </span> */}
-                </span>
-              )}
-            </button>
+            <>
+              <button
+                onClick={handleSubmit}
+                disabled={isLoading}
+                className="submit_button mt-[30px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  "Processing..."
+                ) : (
+                  <span className="flex items-center justify-center">
+                    SUBMIT{" "}
+                    {/* <span className="ml-[15px] flex items-center font-semibold">
+                      <Zap className="mr-[2px]" />1
+                    </span> */}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDonate(true)}
+                className="submit_button flex items-center justify-center mt-[15px] text-white text-[26px] font-bold w-full rounded-[14px] bg-[#0f0f0f] h-[50px]"
+              >
+                Support Us (50% to 🇵🇸)
+              </button>
+            </>
           )}
 
           {aiResponse && warning && (
@@ -201,7 +211,7 @@ export default function Home() {
               <div className="divider"></div>
               <div className="breakdown">
                 <h3 className="font-semibold text-[22px]">Breakdown:</h3>
-                <p className="font-medium text-[#6f6f6f] mt-[10px]">
+                {/* <p className="font-medium text-[#6f6f6f] mt-[10px]">
                   Breakdown is currently not available cuz im broke to afford AI
                   tokens. Support project to get the breakdown in the future.
                 </p>
@@ -211,28 +221,37 @@ export default function Home() {
                   className="submit_button flex items-center justify-center mt-[30px] text-[#0f0f0f] text-[24px] font-bold w-full rounded-[14px] bg-white h-[45px]"
                 >
                   Support Us (50% for 🇵🇸)
-                </button>
-                {/* <div className="prose prose-sm mt-[10px] text-[#414141]">
+                </button> */}
+                <div className="prose prose-sm mt-[10px] text-[#414141]">
                   <ReactMarkdown
                     rehypePlugins={[rehypeSanitize]} // Critical for extra safety
                   >
                     {JSON.parse(aiResponse).breakdownMD || ""}
                   </ReactMarkdown>
-                </div> */}
+                </div>
               </div>
             </div>
           )}
 
           {aiResponse && (
-            <button
-              onClick={() => setAiResponse(null)}
-              className="submit_button flex items-center justify-center mt-[30px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              USE AGAIN{" "}
-              {/* <span className="ml-[15px] flex items-center font-semibold">
-                <Zap className="mr-[2px]" />1
-              </span> */}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setShowDonate(true)}
+                className="submit_button flex items-center justify-center mt-[30px] text-white text-[26px] font-bold w-full rounded-[14px] bg-[#0f0f0f] h-[50px]"
+              >
+                Support Us (50% to 🇵🇸)
+              </button>
+              <button
+                onClick={() => setAiResponse(null)}
+                className="submit_button flex items-center justify-center mt-[15px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                USE AGAIN{" "}
+                {/* <span className="ml-[15px] flex items-center font-semibold">
+                  <Zap className="mr-[2px]" />1
+                </span> */}
+              </button>
+            </>
           )}
         </div>
       </div>
