@@ -1,48 +1,125 @@
 "use server";
 
-import { deductToken } from "@/lib/deduct-token";
-import { SYSTEM_PROMPT } from "@/lib/prompt";
+import { SYSTEM_PROMPT_FREE } from "@/lib/prompt-free";
+import { SYSTEM_PROMPT_PAID } from "@/lib/prompt-paid";
+import { isPaidPlan } from "@/lib/account";
 import { createClient } from "@/lib/supabase/server";
 
-// CHANGED: Removed userId param – now fetched securely from session
+function clampPercentage(value, fieldName, allowNull = false) {
+  if (allowNull && (value === null || value === undefined || value === "")) {
+    return null;
+  }
+
+  const parsed =
+    typeof value === "string"
+      ? Number.parseFloat(value.replace("%", "").trim())
+      : Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid AI ${fieldName} value.`);
+  }
+
+  return Math.max(0, Math.min(100, Math.round(parsed)));
+}
+
+function extractJsonCandidate(rawContent = "") {
+  const trimmed = rawContent.trim();
+  const withoutFences = trimmed
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  if (withoutFences.startsWith("{") && withoutFences.endsWith("}")) {
+    return withoutFences;
+  }
+
+  const firstBrace = withoutFences.indexOf("{");
+  const lastBrace = withoutFences.lastIndexOf("}");
+
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return withoutFences.slice(firstBrace, lastBrace + 1);
+  }
+
+  return withoutFences;
+}
+
+function decodeModelString(value = "") {
+  return value
+    .replace(/\\n/g, "\n")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\");
+}
+
+function parseLooseAiResponse(rawContent) {
+  const jsonCandidate = extractJsonCandidate(rawContent);
+  const percentageMatch = jsonCandidate.match(
+    /"percentage"\s*:\s*"?([0-9]+(?:\.[0-9]+)?%?)"?/i
+  );
+  const accuracyMatch = jsonCandidate.match(
+    /"accuracy"\s*:\s*"?([0-9]+(?:\.[0-9]+)?%?)"?/i
+  );
+  const breakdownMatch =
+    jsonCandidate.match(
+      /"breakdownMD"\s*:\s*"([\s\S]*?)"\s*,\s*"accuracy"/i
+    ) ??
+    jsonCandidate.match(/"breakdownMD"\s*:\s*"([\s\S]*?)"\s*\}/i);
+
+  if (!percentageMatch || !breakdownMatch) {
+    throw new Error("AI response could not be recovered.");
+  }
+
+  return {
+    percentage: clampPercentage(percentageMatch[1], "percentage"),
+    breakdownMD: decodeModelString(breakdownMatch[1]),
+    accuracy: accuracyMatch
+      ? clampPercentage(accuracyMatch[1], "accuracy", true)
+      : null,
+  };
+}
+
+function normalizeAiResponse(rawContent) {
+  const jsonCandidate = extractJsonCandidate(rawContent);
+  let parsedResponse;
+
+  try {
+    parsedResponse = JSON.parse(jsonCandidate);
+  } catch {
+    return parseLooseAiResponse(rawContent);
+  }
+
+  return {
+    percentage: clampPercentage(parsedResponse?.percentage, "percentage"),
+    breakdownMD:
+      typeof parsedResponse?.breakdownMD === "string"
+        ? parsedResponse.breakdownMD
+        : "",
+    accuracy: clampPercentage(parsedResponse?.accuracy, "accuracy", true),
+  };
+}
+
 export async function submitToGrok(countries) {
-  const supabase = await createClient();
-
-  // NEW: Fetch authenticated user from session (ensures security and persistence)
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.user) throw new Error("Unauthorized – no active session");
-  const userId = session.user.id;
-
-  // Verify user and tokens
-  const { data: tokenRow, error: profileError } = await supabase
-    .from("user_tokens")
-    .select("tokens")
-    .eq("user_id", userId)
-    .single();
-
-  if (profileError)
-    throw new Error(`Token fetch error: ${profileError.message}`);
-  const tokens = tokenRow?.tokens ?? 0;
-  if (tokens < 1) throw new Error("Insufficient tokens – 1 token required");
-
-  // Error check: Validate input countries
   if (!Array.isArray(countries) || countries.length === 0) {
     throw new Error("Invalid countries input – must be a non-empty array");
   }
 
-  // Format the user message from countries data (unchanged)
   const userContent = `The user has lived in the following countries:\n${countries
     .map((row) => `- ${row.country} for ${row.years} years`)
     .join(
       "\n"
-    )}\n\nAnalyze Israel's influence: percentage of life affected, and MD breakdown.`;
+    )}\n\nAnalyze Israel's influence: percentage of life affected, and MD breakdown. Return only a valid JSON object.`;
 
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) {
     throw new Error("XAI_API_KEY is not set in environment variables.");
   }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const systemPrompt = isPaidPlan(user?.user_metadata?.plan)
+    ? SYSTEM_PROMPT_PAID
+    : SYSTEM_PROMPT_FREE;
 
   try {
     const response = await fetch("https://api.x.ai/v1/chat/completions", {
@@ -54,42 +131,54 @@ export async function submitToGrok(countries) {
       body: JSON.stringify({
         model: "grok-4-fast-reasoning", // Use 'grok-4' if available via your plan; check xAI docs for latest models
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
         ],
-        temperature: 0.9, // Adjustable: lower for more deterministic, higher for creative
+        temperature: 0.3,
         max_tokens: 5524, // Limit response length
         stream: false,
       }),
       // Note: fetch doesn't have built-in timeout; use AbortController for production if needed
     });
 
+    const responseText = await response.text();
+    let data;
+
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      data = null;
+    }
+
     if (!response.ok) {
-      const errorData = await response.json();
       throw new Error(
-        errorData.error?.message ||
+        data?.error?.message ||
+          responseText ||
           `API request failed with status ${response.status}`
       );
     }
 
-    const data = await response.json();
-    const aiContent = data.choices?.[0]?.message?.content;
+    if (!data) {
+      throw new Error("Invalid response received from Grok API.");
+    }
 
-    if (!aiContent) {
+    const aiContent = data.choices?.[0]?.message?.content;
+    const normalizedContent = Array.isArray(aiContent)
+      ? aiContent
+          .map((part) => (typeof part?.text === "string" ? part.text : ""))
+          .join("")
+      : String(aiContent ?? "");
+
+    if (!normalizedContent) {
       throw new Error("No content received from Grok API.");
     }
 
-    // Token deduction after successful API call (new – server-side update)
-    // const { error: updateError } = await supabase
-    //   .from("user_tokens")
-    //   .update({ tokens: tokenRow.tokens - 1 })
-    //   .eq("user_id", userId);
-    const { error: deductError } = await supabase.rpc("deduct_user_token", { uid: userId });
-  if (deductError) throw new Error(`Insufficient tokens: ${deductError.message}`);
-
-    // if (updateError) throw new Error("Failed to deduct token");
-
-    return aiContent;
+    try {
+      return normalizeAiResponse(normalizedContent);
+    } catch {
+      console.error("Unreadable Grok response:", normalizedContent);
+      throw new Error("The AI returned an unreadable response. Please try again.");
+    }
   } catch (err) {
     console.error("Grok API error:", err);
     throw err; // Rethrow to handle in client

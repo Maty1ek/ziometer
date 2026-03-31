@@ -1,66 +1,29 @@
 'use client'
 
+import { createWhopCheckout } from "@/app/actions/createWhopCheckout";
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { X } from 'lucide-react'
+import { normalizeUsername, usernameToEmail } from "@/lib/account";
 
 export function LoginForm({
   className,
   ...props
 }) {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
-
-  const handleSocialLogin = async (e) => {
-    e.preventDefault()
-    const supabase = createClient()
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const data = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/oauth?next=/`,
-        },
-      })
-
-      
-
-      if (data.error) throw error
-
-      // if (data.session) {
-        // Immediate session (rare if confirmation enabled)
-        await supabase.auth.getSession(); 
-        // await supabase.auth.refreshSession()// Refresh to trigger listener
-        // props.onClose();
-      // } else {
-      //   // Confirmation pending – show UI message
-      //   setError("Check your email to confirm signup!"); // Or use a success toast/state
-      //   props.onClose(); // Still close modal
-      // }
-    
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'An error occurred')
-      setIsLoading(false)
-    }
-  }
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -70,15 +33,28 @@ export function LoginForm({
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: usernameToEmail(normalizeUsername(username)),
         password,
       })
       if (error) throw error
-      // Update this route to redirect to an authenticated route. The user already has an active session.
-      await supabase.auth.getSession();
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (props.selectedPlanKey) {
+        if (!user?.id) {
+          throw new Error("Logged in, but checkout could not start automatically. Please try again.");
+        }
+
+        const checkoutUrl = await createWhopCheckout(props.selectedPlanKey)
+        window.location.href = checkoutUrl
+        return
+      }
+
+      props.onAuthSuccess?.(user ?? null)
       props.onClose()
 
-      // router.push('/protected')
     } catch (error) {
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {
@@ -99,23 +75,18 @@ export function LoginForm({
           <form onSubmit={handleLogin}>
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="username">Username</Label>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="m@example.com"
+                  id="username"
+                  type="text"
+                  placeholder="username"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)} />
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)} />
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">
                   <Label htmlFor="password">Password</Label>
-                  <button
-                    onClick={() => {props.onClose(); props.onReset()}}
-                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline">
-                    Forgot your password?
-                  </button>
                 </div>
                 <Input
                   id="password"
@@ -126,15 +97,12 @@ export function LoginForm({
               </div>
               {error && <p className="text-sm text-red-500">{error}</p>}
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Logging in...' : 'Login'}
-              </Button>
-              <Button type="button" onClick={handleSocialLogin} className="w-full" disabled={isLoading}>
-                {isLoading ? 'Logging in...' : 'Continue with Google'}
+                {isLoading ? 'Logging in...' : props.selectedPlanKey ? 'Login & continue' : 'Login'}
               </Button>
             </div>
             <div className="mt-4 text-center text-sm">
               Don&apos;t have an account?{' '}
-              <button onClick={() => {props.onClose(), props.onAuth()}} className="underline underline-offset-4">
+              <button type="button" onClick={() => {props.onClose(), props.onAuth(props.selectedPlanKey)}} className="underline underline-offset-4">
                 Sign up
               </button>
             </div>

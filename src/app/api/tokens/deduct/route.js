@@ -2,23 +2,20 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 export async function POST() {
-  const supabase = createClient();
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
-  const {data: {session}} = await supabase.auth.getSession();
-  
-  if (!session?.user) {
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { error } = await supabase.rpc("deduct_user_token", {
-    uid: session.user.id,
+  return NextResponse.json({
+    success: true,
+    message: "Tokens are no longer used. Access is controlled by plan.",
   });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 403 });
-  }
-
-  return NextResponse.json({ success: true });
 }
 
 

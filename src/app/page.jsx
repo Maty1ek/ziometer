@@ -4,7 +4,7 @@ import bgCircles from "../../public/bg_circles.svg";
 import { CircleUserRound, Plus, XIcon, Zap } from "lucide-react";
 import MainInputs from "@/components/main-inputs";
 import BuyModal from "@/components/BuyModal";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useCallback } from "react";
 import { submitToGrok } from "@/app/actions/submitToGrok";
 import { SignUpForm } from "@/components/sign-up-form";
 import { LoginForm } from "@/components/login-form";
@@ -17,7 +17,90 @@ import SearchParamsHandler from "@/components/SearchParamsHandler";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
+import {
+  getPlanDisplayName,
+  hasFullBreakdownAccess,
+  isPaidPlan,
+  PENDING_PLAN_STORAGE_KEY,
+} from "@/lib/account";
 
+const stripMarkdownInline = (value = "") =>
+  value
+    .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
+    .replace(/[*_`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const getBreakdownPreview = (markdown = "") => {
+  const normalized = markdown.replace(/\r/g, "").trim();
+
+  if (!normalized) {
+    return {
+      heading: "",
+      body: "",
+      hiddenMarkdown: "",
+    };
+  }
+
+  const lines = normalized.split("\n");
+  let heading = "";
+  let bodyLines = [];
+  let bodyStarted = false;
+  let remainingStartIndex = lines.length;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const trimmedLine = lines[index].trim();
+
+    if (!heading && trimmedLine.startsWith("## ")) {
+      heading = stripMarkdownInline(trimmedLine.replace(/^##\s+/, ""));
+      continue;
+    }
+
+    if (!trimmedLine) {
+      if (bodyStarted) {
+        remainingStartIndex = index + 1;
+        break;
+      }
+
+      continue;
+    }
+
+    if (trimmedLine.startsWith("## ")) {
+      remainingStartIndex = index;
+      break;
+    }
+
+    if (/^[-*+]\s+/.test(trimmedLine)) {
+      if (bodyStarted) {
+        remainingStartIndex = index;
+        break;
+      }
+
+      remainingStartIndex = index;
+      break;
+    }
+
+    bodyStarted = true;
+    bodyLines.push(trimmedLine);
+  }
+
+  const body = stripMarkdownInline(bodyLines.join(" "));
+  const hiddenMarkdown = lines.slice(remainingStartIndex).join("\n").trim();
+
+  return {
+    heading,
+    body,
+    hiddenMarkdown: hiddenMarkdown || normalized,
+  };
+};
+
+const markdownComponents = {
+  h2: ({ children }) => (
+    <h2 className="mt-[18px] mb-[8px] text-[20px] font-bold leading-[1.35] text-[#243344]">
+      {children}
+    </h2>
+  ),
+};
 
 export default function Home() {
   // const searchParams = useSearchParams(); // HOOK FOR URL PARAMS
@@ -28,22 +111,49 @@ export default function Home() {
   const [aiResponse, setAiResponse] = useState(null);
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
-  const [tokens, setTokens] = useState(0);
   const [showAuth, setShowAuth] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [resetPassword, setResetPassword] = useState(false);
   const [showBuy, setShowBuy] = useState(false);
   const [warning, setWarning] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [selectedPlanKey, setSelectedPlanKey] = useState(null);
 
   const [showAccount, setShowAccount] = useState(false);
 
-  const [pendingSubmit, setPendingSubmit] = useState(false);
-  const [isFetchingTokens, setIsFetchingTokens] = useState(false);
-
-  const [authLoading, setAuthLoading] = useState(true);
-
   const [isPollingPayment, setIsPollingPayment] = useState(false);
+
+  const resetMainState = useCallback(() => {
+    setCountries([{ country: "", years: "" }]);
+    setAiResponse(null);
+    setWarning(false);
+    setError(null);
+  }, []);
+
+  const handlePaymentSuccess = useCallback(() => {
+    resetMainState();
+    setShowBuy(false);
+    setShowAuth(false);
+    setShowLogin(false);
+    setIsPollingPayment(true);
+  }, [resetMainState]);
+
+  const refreshCurrentUser = async () => {
+    const response = await fetch("/api/auth", {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to refresh user");
+    }
+
+    const data = await response.json();
+    const nextUser = data.user ?? null;
+
+    setUser(nextUser);
+    return nextUser;
+  };
 
   // useEffect(() => {
   //   if (searchParams.get("payment") === "success") {
@@ -60,63 +170,50 @@ export default function Home() {
 
   useEffect(() => {
     let intervalId;
+    let timeoutId;
 
-    if (isPollingPayment && user) {
-      console.log("Polling for tokens started...");
+    if (isPollingPayment) {
+      const pollPaidPlan = async () => {
+        try {
+          const nextUser = await refreshCurrentUser();
 
-      const checkTokens = async () => {
-        // Initial quick check
-        const response = await fetch("/api/tokens/getTokens", {
-          method: "GET",
-          credentials: "include", // Important for cookies
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch tokens");
-        }
-
-        const { tokens: userTokens } = await response.json();
-
-        const currentTokens = userTokens ?? 0;
-
-        if (currentTokens > 0) {
-          setTokens(currentTokens);
-          setIsPollingPayment(false); // Stop polling triggers the cleanup
+          if (isPaidPlan(nextUser?.user_metadata?.plan)) {
+            setIsPollingPayment(false);
+            setSelectedPlanKey(null);
+            localStorage.removeItem(PENDING_PLAN_STORAGE_KEY);
+          }
+        } catch (err) {
+          console.error("Payment refresh failed:", err);
         }
       };
 
-      checkTokens(); // Run once immediately
+      pollPaidPlan();
+      intervalId = setInterval(pollPaidPlan, 2000);
 
-      // Run every 2 seconds
-      intervalId = setInterval(checkTokens, 2000);
-
-      // Stop automatically after 30 seconds to save resources
-      setTimeout(() => {
-        if (isPollingPayment) setIsPollingPayment(false);
+      timeoutId = setTimeout(() => {
+        setIsPollingPayment(false);
       }, 30000);
     }
 
-    // Cleanup: This runs when isPollingPayment becomes false OR component unmounts
     return () => {
       if (intervalId) clearInterval(intervalId);
+      if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [isPollingPayment, user]);
+  }, [isPollingPayment]);
 
   // NEW: Effect for fetching initial session and setting up listener
   useEffect(() => {
+    const storedPlanKey = localStorage.getItem(PENDING_PLAN_STORAGE_KEY);
+
+    if (storedPlanKey) {
+      setSelectedPlanKey(storedPlanKey);
+    }
+
     const fetchSession = async () => {
       try {
-        const res = await fetch("/api/auth");
-        const data = await res.json();
-
-        data.session?.user && setUser(data.session?.user );
+        await refreshCurrentUser();
       } catch (err) {
         console.error("Error fetching session:", err);
-      } finally {
-        setAuthLoading(false);
       }
     };
 
@@ -125,83 +222,23 @@ export default function Home() {
     // Set up auth state change listener
     const {
       data: { subscription },
-    } = supabaseClient.auth.onAuthStateChange((_event, session) => {
-      session?.user && setUser(session?.user );
+    } = supabaseClient.auth.onAuthStateChange(() => {
+      fetchSession().catch((err) => {
+        console.error("Error refreshing auth state:", err);
+        setUser(null);
+      });
     });
 
     // Cleanup listener on unmount
     return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    const saved = localStorage.getItem("pendingCountries");
-    if (saved) setCountries(JSON.parse(saved));
+  const userPlan = user?.user_metadata?.plan ?? "";
+  const planLabel = getPlanDisplayName(userPlan).toUpperCase();
+  const showFullBreakdown = hasFullBreakdownAccess(userPlan);
+  const shouldBlurBreakdown = !showFullBreakdown;
 
-    const savedPending = localStorage.getItem("pendingSubmit");
-    if (savedPending) {
-      setPendingSubmit(JSON.parse(savedPending));
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("pendingSubmit", JSON.stringify(pendingSubmit));
-  }, [pendingSubmit]);
-
-  const fetchTokens = async (isDeduct) => {
-    if (!user) return;
-    isDeduct ? "" : setIsFetchingTokens(true);
-    try {
-      const response = await fetch("/api/tokens/getTokens", {
-        method: "GET",
-        credentials: "include", // Important for cookies
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch tokens");
-      }
-
-      const { tokens: userTokens } = await response.json();
-      setTokens(userTokens);
-    } finally {
-      isDeduct ? "" : setIsFetchingTokens(false);
-    }
-  };
-
-  useEffect(() => {
-    if (user) {
-      fetchTokens();
-    } else {
-      setTokens(0);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    // Only proceed if we are NOT currently verifying a payment
-    if (isPollingPayment) return;
-
-    if (pendingSubmit && user && !authLoading && !isFetchingTokens) {
-      if (tokens >= 1) {
-        // Success case: We have tokens and a pending job -> Submit
-        doSubmit();
-        setShowBuy(false);
-      } else if (!showBuy) {
-        // Fail case: No tokens -> Show buy modal
-        setShowBuy(true);
-      }
-    }
-  }, [
-    user,
-    pendingSubmit,
-    authLoading,
-    isFetchingTokens,
-    tokens,
-    isPollingPayment,
-  ]);
-
-  const doSubmit = async () => {
+  const doSubmit = async (submissionCountries) => {
     if (isLoading) return; // Prevent double clicks
 
     setIsLoading(true);
@@ -209,66 +246,42 @@ export default function Home() {
     setAiResponse(null);
 
     try {
-      // 1. Run your AI Logic
-      const response = await submitToGrok(countries);
-      setAiResponse(response); // Mock response
-      setWarning(true);
+      const response = await submitToGrok(submissionCountries);
+      const parsedResponse =
+        response && typeof response === "object" ? response : null;
 
-      // 2. Clear pending storage
-      localStorage.removeItem("pendingCountries");
-      localStorage.removeItem("pendingSubmit");
-
-      // 3. IMPORTANT: Update State to prevent infinite loop
-      setPendingSubmit(false);
-
-      // 4. Deduct Token
-      response && (await fetchTokens(true));
-    } catch (err) {
-      if (err.message && err.message.includes("Unauthorized")) {
-        setUser(null);
-        setShowAuth(true);
+      if (!parsedResponse) {
+        throw new Error(
+          "The AI returned an unreadable response. Please try again.",
+        );
       }
-      setError(err.message || "Error processing request.");
+
+      setAiResponse({
+        percentage: parsedResponse?.percentage ?? 0,
+        breakdownMD: parsedResponse?.breakdownMD ?? "",
+        accuracy: parsedResponse?.accuracy ?? null,
+      });
+      setWarning(true);
+    } catch (err) {
+      setError(
+        err.message || "Error processing request. Please try submitting again.",
+      );
       console.log(err.message);
     } finally {
       setIsLoading(false);
-      // Ensure state is cleared in case of error too
-      localStorage.removeItem("pendingSubmit");
-      setPendingSubmit(false);
     }
   };
 
   const handleSubmit = async () => {
     const validCountries = countries.filter(
-      (row) => row.country.trim() && row.years.trim()
+      (row) => row.country.trim() && row.years.trim(),
     );
     if (validCountries.length === 0) {
       setError("Please enter at least one country and years.");
       return;
     }
 
-    // Save pending
-    localStorage.setItem("pendingCountries", JSON.stringify(countries));
-
-    // CHANGED: Add authLoading check to prevent submit during initial load
-    if (authLoading) {
-      setError("Authenticating... please wait.");
-      return;
-    }
-
-    setPendingSubmit(true);
-
-    if (!user) {
-      setShowAuth(true);
-      return;
-    }
-
-    if (tokens < 1) {
-      setShowBuy(true);
-      return;
-    }
-
-    await doSubmit();
+    await doSubmit(validCountries);
   };
 
   const handleLogOut = async () => {
@@ -289,11 +302,9 @@ export default function Home() {
       }
 
       // Clear local state
-      setTokens(0);
-      setAiResponse(null);
-      setWarning(false);
-      setError(null);
-      localStorage.removeItem("pendingCountries");
+      setSelectedPlanKey(null);
+      localStorage.removeItem(PENDING_PLAN_STORAGE_KEY);
+      resetMainState();
 
       // Close modal first
       setShowAccount(false);
@@ -321,11 +332,9 @@ export default function Home() {
       }
 
       // Clear local state
-      setTokens(0);
-      setAiResponse(null);
-      setWarning(false);
-      setError(null);
-      localStorage.removeItem("pendingCountries");
+      setSelectedPlanKey(null);
+      localStorage.removeItem(PENDING_PLAN_STORAGE_KEY);
+      resetMainState();
 
       // Close modal first
       setShowAccount(false);
@@ -338,28 +347,15 @@ export default function Home() {
     }
   };
 
-  // NEW: Show loading UI during initial auth check
-  if (authLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        Loading authentication...
-      </div>
-    );
-  }
-console.log(user,'ko');
+  const lockedBreakdownPreview = getBreakdownPreview(
+    aiResponse?.breakdownMD || "",
+  );
 
   return (
     <div className="relative min-h-screen flex justify-center pt-[15px]">
       <Suspense fallback={null}>
         <SearchParamsHandler
-          onPaymentSuccess={() => {
-            setIsPollingPayment(true);
-
-            // const savedPending = localStorage.getItem("pendingSubmit");
-            // if (savedPending === "false") {
-            //   setPendingSubmit(true);
-            // }
-          }}
+          onPaymentSuccess={handlePaymentSuccess}
         ></SearchParamsHandler>
       </Suspense>
       <div className="bg_circles absolute flex justify-center top-[-15px] w-full overflow-hidden">
@@ -378,16 +374,14 @@ console.log(user,'ko');
           <div className="heading_buttons w-full px-[0px] flex justify-between text-[#414141]">
             <div
               className="burger_button flex items-center gap-[10px]"
-              onClick={() => {
-                user ? setShowBuy(true) : setShowLogin(true);
-              }}
+              onClick={() => setShowBuy(true)}
             >
-              <div className="flex text-[30px] cursor-pointer items-center justify-center bg-[#ffffff76] rounded-[30px] h-[48px] w-[90px]">
-                <Zap size={30} className="mr-[4px]" /> {tokens}
+              <div className="flex min-w-[118px] cursor-pointer items-center justify-center rounded-[30px] bg-[#ffffff76] px-[16px] text-[17px] font-black tracking-[0.08em] text-[#243344] h-[48px] uppercase">
+                <Zap size={20} className="mr-[8px]" /> {planLabel}
               </div>
-              <div className="flex cursor-pointer text-[30px] leading-none items-center justify-center font-mdeium bg-[#ffffff76] rounded-[100%] w-[45px] h-[45px]">
+              {/* <div className="flex cursor-pointer text-[30px] leading-none items-center justify-center font-mdeium bg-[#ffffff76] rounded-[100%] w-[45px] h-[45px]">
                 <Plus />
-              </div>
+              </div> */}
             </div>
             <div
               className="account_button flex cursor-pointer justify-center items-center bg-[#ffffff76] rounded-[100px] h-[48px] w-[48px]"
@@ -421,16 +415,7 @@ console.log(user,'ko');
               disabled={isLoading}
               className="submit_button mt-[30px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? (
-                "Processing..."
-              ) : (
-                <span className="flex items-center justify-center">
-                  SUBMIT{" "}
-                  <span className="ml-[15px] flex items-center font-semibold">
-                    <Zap className="mr-[2px]" />1
-                  </span>
-                </span>
-              )}
+              {isLoading ? "Processing..." : "SUBMIT"}
             </button>
           )}
 
@@ -455,22 +440,91 @@ console.log(user,'ko');
               <div className="life_affection">
                 <h3 className="text-[22px] font-semibold">
                   Your life has been affected by Israel for:{" "}
-                  <span className="font-black">
-                    {JSON.parse(aiResponse).percentage}%
-                  </span>
+                  <span className="font-black">{aiResponse.percentage}%</span>
                 </h3>
               </div>
               <div className="divider"></div>
               <div className="breakdown">
                 <h3 className="font-semibold text-[22px]">Breakdown:</h3>
-                <div className="prose prose-sm mt-[10px] text-[#414141]">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]} // Optional: enables tables, task lists, etc.
-                    rehypePlugins={[rehypeSanitize]} // Critical for extra safety
-                  >
-                    {JSON.parse(aiResponse).breakdownMD || ""}
-                  </ReactMarkdown>
-                </div>
+                {!shouldBlurBreakdown && (
+                  <div className="prose prose-sm mt-[10px] text-[#414141]">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeSanitize]}
+                      components={markdownComponents}
+                    >
+                      {aiResponse.breakdownMD || ""}
+                    </ReactMarkdown>
+                  </div>
+                )}
+
+                {shouldBlurBreakdown && (
+                  // <div className="prose prose-sm mt-[10px] text-[#414141]">
+                  //   <ReactMarkdown
+                  //     remarkPlugins={[remarkGfm]}
+                  //     rehypePlugins={[rehypeSanitize]}
+                  //   >
+                  //     {aiResponse.breakdownMD || ""}
+                  //   </ReactMarkdown>
+                  // </div>
+                  <div className="mt-[14px] radius-[30px] overflow-hidden">
+                    <div className="relative h-[258px] overflow-hidden  ">
+                      <div className="pointer-events-none absolute inset-x-0 top-0 h-[120px] " />
+
+                      {/* <div className="relative z-30 max-w-[92%]">
+                        {lockedBreakdownPreview.heading && (
+                          <p className="text-[15px] font-semibold leading-[1.35] text-[#2f3f50]">
+                            {lockedBreakdownPreview.heading}
+                          </p>
+                        )}
+                        {lockedBreakdownPreview.body && (
+                          <p
+                            className="mt-[8px] text-[15px] leading-[1.65] text-[#45596d]"
+                            style={{
+                              display: "-webkit-box",
+                              WebkitBoxOrient: "vertical",
+                              WebkitLineClamp: 2,
+                              overflow: "hidden",
+                            }}
+                          >
+                            {lockedBreakdownPreview.body}
+                          </p>
+                        )}
+                      </div> */}
+
+                      {/* <div className="absolute inset-x-[20px] top-[88px] bottom-[18px] z-10 overflow-hidden"> */}
+                        {/* <div className="prose prose-sm max-w-none text-[#4b6074] opacity-75 blur-[6px]"> */}
+                          <div className="p-[10px]">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            rehypePlugins={[rehypeSanitize]}
+                            components={markdownComponents}
+                          >
+                            {aiResponse.breakdownMD}
+                          </ReactMarkdown>
+                          </div>
+                        {/* </div> */}
+                      {/* </div> */}
+                      <div className="bg-[#f5f8fb51] inset-0 radius-[10px] absolute top-0 h-full w-full bd_blur"></div>
+                      <div className="bg-[#f5f8fb51] inset-0 radius-[10px] absolute top-0 h-full w-full bd_blur"></div>
+                      <div className="bg-[#f5f8fb51] inset-0 radius-[10px] absolute top-0 h-full w-full bd_blur"></div>
+
+                      <div className="absolute inset-0 rounded-[5px] z-30 flex flex-col items-center justify-center ] px-[20px] text-center ">
+                        <p className="text-[24px] font-bold tracking-[-0.03em] text-[#232323]">
+                          {userPlan === "plan_cheap"
+                            ? "Upgrade for full breakdown"
+                            : "Get full breakdown"}
+                        </p>
+                        <button
+                          onClick={() => setShowBuy(true)}
+                          className="submit_button mt-[14px] flex h-[50px] min-w-[176px] items-center justify-center rounded-[16px] bg-white px-[28px] text-[21px] font-bold text-[#0f0f0f] shadow-[0_12px_30px_rgba(73,112,153,0.16)]"
+                        >
+                          Upgrade
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -480,30 +534,47 @@ console.log(user,'ko');
               onClick={() => setAiResponse(null)}
               className="submit_button flex items-center justify-center mt-[30px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              USE AGAIN{" "}
-              <span className="ml-[15px] flex items-center font-semibold">
-                <Zap className="mr-[2px]" />1
-              </span>
+              USE AGAIN
             </button>
           )}
 
           {showAuth && (
             <SignUpForm
-              onLogin={() => setShowLogin(true)}
+              selectedPlanKey={selectedPlanKey}
+              onAuthSuccess={(nextUser) => {
+                if (nextUser) {
+                  setUser(nextUser);
+                }
+              }}
+              onLogin={(planKey) => {
+                setShowAuth(false);
+                setShowLogin(true);
+                setSelectedPlanKey(planKey ?? null);
+              }}
               onClose={() => {
                 setShowAuth(false);
-                if (!user) setPendingSubmit(false);
-                localStorage.removeItem("pendingSubmit");
+                if (selectedPlanKey) {
+                  setShowBuy(true);
+                }
               }}
             />
           )}
           {showLogin && (
             <LoginForm
-              onAuth={() => setShowAuth(true)}
+              selectedPlanKey={selectedPlanKey}
+              onAuth={(planKey) => {
+                setShowLogin(false);
+                setShowAuth(true);
+                setSelectedPlanKey(planKey ?? null);
+              }}
+              onAuthSuccess={async () => {
+                await refreshCurrentUser();
+              }}
               onClose={() => {
                 setShowLogin(false);
-                if (!user) setPendingSubmit(false);
-                localStorage.removeItem("pendingSubmit");
+                if (selectedPlanKey) {
+                  setShowBuy(true);
+                }
               }}
               onReset={() => setResetPassword(true)}
             />
@@ -513,22 +584,22 @@ console.log(user,'ko');
               onLogin={() => setShowLogin(true)}
               onClose={() => {
                 setResetPassword(false);
-                if (!user) setPendingSubmit(false);
-                localStorage.removeItem("pendingSubmit");
               }}
             />
           )}
           {showBuy && (
             <BuyModal
               user={user}
+              onSelectPlan={(planKey) => {
+                setSelectedPlanKey(planKey);
+                localStorage.setItem(PENDING_PLAN_STORAGE_KEY, planKey);
+                setShowBuy(false);
+                setShowAuth(true);
+              }}
               onClose={() => {
                 setShowBuy(false);
               }}
-              onBuySuccess={async () => {
-                await fetchTokens();
-                await doSubmit();
-              }}
-            /> // Add onBuySuccess prop
+            />
           )}
 
           {showAccount && user ? (
@@ -540,12 +611,13 @@ console.log(user,'ko');
             />
           ) : showAccount && !user ? (
             <LoginForm
-              onAuth={() => setShowAuth(true)}
+              onAuth={() => {
+                setSelectedPlanKey(null);
+                setShowAuth(true);
+              }}
               onClose={() => {
                 setShowLogin(false);
                 setShowAccount(false);
-                if (!user) setPendingSubmit(false);
-                localStorage.removeItem("pendingSubmit");
               }}
               onReset={() => setResetPassword(true)}
             />
