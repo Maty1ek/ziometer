@@ -1,9 +1,10 @@
 "use client";
 import Image from "next/image";
 import bgCircles from "../../public/bg_circles.svg";
+import discordIcon from "../../public/discord.png";
 import tiktokIcon from "../../public/tiktok_icon.svg";
 import xIcon from "../../public/twitter_icon.webp";
-import { CircleUserRound, Instagram, MessageCircle, Plus, XIcon, Zap } from "lucide-react";
+import { CircleUserRound, Instagram, Plus, XIcon, Zap } from "lucide-react";
 import MainInputs from "@/components/main-inputs";
 import BuyModal from "@/components/BuyModal";
 import { useState, useEffect, Suspense, useCallback } from "react";
@@ -439,9 +440,9 @@ export default function Home() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Discord"
-                    className="flex h-[35px] w-[35px] items-center justify-center rounded-[999px] bg-[#ffffff80] text-[#243344] transition hover:bg-white"
+                    className="flex h-[35px] w-[35px] items-center justify-center rounded-[999px] bg-[#ffffff80] transition hover:bg-white"
                   >
-                    <MessageCircle size={18} />
+                    <Image src={discordIcon} width={18} height={18} alt="Discord" />
                   </a>
                 )}
               </div>
@@ -752,9 +753,9 @@ export default function Home() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Discord"
-                    className="flex h-[42px] w-[42px] items-center justify-center rounded-[999px] bg-[#ffffff80] text-[#243344] transition hover:bg-white"
+                    className="flex h-[42px] w-[42px] items-center justify-center rounded-[999px] bg-[#ffffff80] transition hover:bg-white"
                   >
-                    <MessageCircle size={21} />
+                    <Image src={discordIcon} width={30} height={30} alt="Discord" />
                   </a>
                 )}
               </div>
