@@ -4,8 +4,7 @@ import bgCircles from "../../public/bg_circles.svg";
 import { CircleUserRound, Instagram, Share2, Plus, XIcon, Zap } from "lucide-react";
 import MainInputs from "@/components/main-inputs";
 import BuyModal from "@/components/BuyModal";
-import DonateWindow from "@/components/DonateWindow";
-import { useMemo, useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useCallback } from "react";
 import { submitToGrok } from "@/app/actions/submitToGrok";
 // import { SignUpForm } from "@/components/sign-up-form";
 // import { LoginForm } from "@/components/login-form";
@@ -18,9 +17,90 @@ import SearchParamsHandler from "@/components/SearchParamsHandler";
 import ReactMarkdown from "react-markdown";
 // import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
-import tiktok from "../../public/tiktok_icon.svg";
-import twitter from "../../public/twitter_icon.webp";
-import ShareResultsModal from "@/components/ShareResultsModal";
+import {
+  getPlanDisplayName,
+  hasFullBreakdownAccess,
+  isPaidPlan,
+  PENDING_PLAN_STORAGE_KEY,
+} from "@/lib/account";
+
+const stripMarkdownInline = (value = "") =>
+  value
+    .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
+    .replace(/[*_`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const getBreakdownPreview = (markdown = "") => {
+  const normalized = markdown.replace(/\r/g, "").trim();
+
+  if (!normalized) {
+    return {
+      heading: "",
+      body: "",
+      hiddenMarkdown: "",
+    };
+  }
+
+  const lines = normalized.split("\n");
+  let heading = "";
+  let bodyLines = [];
+  let bodyStarted = false;
+  let remainingStartIndex = lines.length;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const trimmedLine = lines[index].trim();
+
+    if (!heading && trimmedLine.startsWith("## ")) {
+      heading = stripMarkdownInline(trimmedLine.replace(/^##\s+/, ""));
+      continue;
+    }
+
+    if (!trimmedLine) {
+      if (bodyStarted) {
+        remainingStartIndex = index + 1;
+        break;
+      }
+
+      continue;
+    }
+
+    if (trimmedLine.startsWith("## ")) {
+      remainingStartIndex = index;
+      break;
+    }
+
+    if (/^[-*+]\s+/.test(trimmedLine)) {
+      if (bodyStarted) {
+        remainingStartIndex = index;
+        break;
+      }
+
+      remainingStartIndex = index;
+      break;
+    }
+
+    bodyStarted = true;
+    bodyLines.push(trimmedLine);
+  }
+
+  const body = stripMarkdownInline(bodyLines.join(" "));
+  const hiddenMarkdown = lines.slice(remainingStartIndex).join("\n").trim();
+
+  return {
+    heading,
+    body,
+    hiddenMarkdown: hiddenMarkdown || normalized,
+  };
+};
+
+const markdownComponents = {
+  h2: ({ children }) => (
+    <h2 className="mt-[18px] mb-[8px] text-[20px] font-bold leading-[1.35] text-[#243344]">
+      {children}
+    </h2>
+  ),
+};
 
 export default function Home() {
   // const searchParams = useSearchParams(); // HOOK FOR URL PARAMS
@@ -34,7 +114,6 @@ export default function Home() {
   const [aiResponse, setAiResponse] = useState(null);
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
-  const [tokens, setTokens] = useState(0);
   const [showAuth, setShowAuth] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [resetPassword, setResetPassword] = useState(false);
@@ -43,17 +122,128 @@ export default function Home() {
   const [showShare, setShowShare] = useState(false);
   const [warning, setWarning] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [selectedPlanKey, setSelectedPlanKey] = useState(null);
 
-  const parsed = useMemo(() => {
-    if (!aiResponse) return null;
-    try {
-      return JSON.parse(aiResponse);
-    } catch {
-      return null;
+  const [showAccount, setShowAccount] = useState(false);
+
+  const [isPollingPayment, setIsPollingPayment] = useState(false);
+
+  const resetMainState = useCallback(() => {
+    setCountries([{ country: "", years: "" }]);
+    setAiResponse(null);
+    setWarning(false);
+    setError(null);
+  }, []);
+
+  const handlePaymentSuccess = useCallback(() => {
+    resetMainState();
+    setShowBuy(false);
+    setShowAuth(false);
+    setShowLogin(false);
+    setIsPollingPayment(true);
+  }, [resetMainState]);
+
+  const refreshCurrentUser = async () => {
+    const response = await fetch("/api/auth", {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to refresh user");
     }
-  }, [aiResponse]);
 
-  const doSubmit = async () => {
+    const data = await response.json();
+    const nextUser = data.user ?? null;
+
+    setUser(nextUser);
+    return nextUser;
+  };
+
+  // useEffect(() => {
+  //   if (searchParams.get("payment") === "success") {
+  //     setIsPollingPayment(true);
+
+  //     const savedPending = localStorage.getItem("pendingSubmit");
+  //     if (savedPending === "false") {
+  //       setPendingSubmit(true);
+  //     }
+
+  //     router.replace("/");
+  //   }
+  // }, [searchParams, router]);
+
+  useEffect(() => {
+    let intervalId;
+    let timeoutId;
+
+    if (isPollingPayment) {
+      const pollPaidPlan = async () => {
+        try {
+          const nextUser = await refreshCurrentUser();
+
+          if (isPaidPlan(nextUser?.user_metadata?.plan)) {
+            setIsPollingPayment(false);
+            setSelectedPlanKey(null);
+            localStorage.removeItem(PENDING_PLAN_STORAGE_KEY);
+          }
+        } catch (err) {
+          console.error("Payment refresh failed:", err);
+        }
+      };
+
+      pollPaidPlan();
+      intervalId = setInterval(pollPaidPlan, 2000);
+
+      timeoutId = setTimeout(() => {
+        setIsPollingPayment(false);
+      }, 30000);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [isPollingPayment]);
+
+  // NEW: Effect for fetching initial session and setting up listener
+  useEffect(() => {
+    const storedPlanKey = localStorage.getItem(PENDING_PLAN_STORAGE_KEY);
+
+    if (storedPlanKey) {
+      setSelectedPlanKey(storedPlanKey);
+    }
+
+    const fetchSession = async () => {
+      try {
+        await refreshCurrentUser();
+      } catch (err) {
+        console.error("Error fetching session:", err);
+      }
+    };
+
+    fetchSession();
+
+    // Set up auth state change listener
+    const {
+      data: { subscription },
+    } = supabaseClient.auth.onAuthStateChange(() => {
+      fetchSession().catch((err) => {
+        console.error("Error refreshing auth state:", err);
+        setUser(null);
+      });
+    });
+
+    // Cleanup listener on unmount
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const userPlan = user?.user_metadata?.plan ?? "";
+  const planLabel = getPlanDisplayName(userPlan).toUpperCase();
+  const showFullBreakdown = hasFullBreakdownAccess(userPlan);
+  const shouldBlurBreakdown = !showFullBreakdown;
+
+  const doSubmit = async (submissionCountries) => {
     if (isLoading) return; // Prevent double clicks
 
     setIsLoading(true);
@@ -61,19 +251,29 @@ export default function Home() {
     setAiResponse(null);
 
     try {
-      // 1. Run your AI Logic
-      const response = await submitToGrok(countries);
-      setAiResponse(response); // Mock response
+      const response = await submitToGrok(submissionCountries);
+      const parsedResponse =
+        response && typeof response === "object" ? response : null;
+
+      if (!parsedResponse) {
+        throw new Error(
+          "The AI returned an unreadable response. Please try again.",
+        );
+      }
+
+      setAiResponse({
+        percentage: parsedResponse?.percentage ?? 0,
+        breakdownMD: parsedResponse?.breakdownMD ?? "",
+        accuracy: parsedResponse?.accuracy ?? null,
+      });
       setWarning(true);
-      setShowDonate(true);
     } catch (err) {
-      setError(err.message || "Error processing request.");
+      setError(
+        err.message || "Error processing request. Please try submitting again.",
+      );
       console.log(err.message);
     } finally {
       setIsLoading(false);
-      // Ensure state is cleared in case of error too
-      // localStorage.removeItem("pendingSubmit");
-      // setPendingSubmit(false);
     }
   };
 
@@ -86,23 +286,81 @@ export default function Home() {
       return;
     }
 
-    await doSubmit();
+    await doSubmit(validCountries);
   };
 
-  // NEW: Show loading UI during initial auth check
+  const handleLogOut = async () => {
+    try {
+      const response = await fetch("/api/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        console.error("Logout error:", data.error || "Server error");
+        setError("Failed to log out. Please try again.");
+        return;
+      }
+
+      // Clear local state
+      setSelectedPlanKey(null);
+      localStorage.removeItem(PENDING_PLAN_STORAGE_KEY);
+      resetMainState();
+
+      // Close modal first
+      setShowAccount(false);
+
+      // Force full reload — most reliable in App Router to clear server cache
+      window.location.href = "/";
+    } catch (err) {
+      console.error("Unexpected logout error:", err);
+      setError("Logout failed.");
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      const response = await fetch("/api/supa/auth/delete", {
+        method: "POST",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        console.error("Delete error:", data.error || "Server error");
+        setError("Failed to delete account. Please try again.");
+        return;
+      }
+
+      // Clear local state
+      setSelectedPlanKey(null);
+      localStorage.removeItem(PENDING_PLAN_STORAGE_KEY);
+      resetMainState();
+
+      // Close modal first
+      setShowAccount(false);
+
+      // Force full reload — most reliable in App Router to clear server cache
+      window.location.href = "/";
+    } catch (err) {
+      console.error("Unexpected delete error:", err);
+      setError("Deleting failed.");
+    }
+  };
+
+  const lockedBreakdownPreview = getBreakdownPreview(
+    aiResponse?.breakdownMD || "",
+  );
 
   return (
     <div className="relative min-h-screen flex justify-center pt-[5px]">
       <Suspense fallback={null}>
         <SearchParamsHandler
-        // onPaymentSuccess={() => {
-        //   setIsPollingPayment(true);
-
-        //   const savedPending = localStorage.getItem("pendingSubmit");
-        //   if (savedPending === "false") {
-        //     setPendingSubmit(true);
-        //   }
-        // }}
+          onPaymentSuccess={handlePaymentSuccess}
         ></SearchParamsHandler>
       </Suspense>
       <div className="bg_circles absolute flex justify-center top-[-15px] w-full overflow-hidden">
@@ -117,31 +375,24 @@ export default function Home() {
         </div>
       </div>
       <div className="flex flex-col justify-center items-center relative w-full max-w-[500px] mx-auto">
-        <div className="mainCon z-10 flex flex-col px-[20px] items-center w-full min-w-[308px] pt-[26px] h-full pb-[40px]">
-          <div className="heading_buttons w-full flex justify-between items-center text-[#414141]">
-            <button
-              type="button"
-              onClick={() => setShowDonate(true)}
-              className="submit_button flex items-center justify-center  text-[#0f0f0f] text-[17px] font-bold w-[190px] rounded-[34px] bg-white h-[45px]"
+        <div className="mainCon z-10 flex flex-col px-[20px] items-center w-full min-w-[308px] pt-[15px] h-full pb-[40px]">
+          <div className="heading_buttons w-full px-[0px] flex justify-between text-[#414141]">
+            <div
+              className="burger_button flex items-center gap-[10px]"
+              onClick={() => setShowBuy(true)}
             >
-              Donate (50% for 🇵🇸)
-            </button>
-            <div className="socials flex justify-center items-center gap-[12px] submit_button   bg-[#ffffff71] h-[45px] px-[15px]  rounded-[34px]">
-              {igLink && (
-                <a href={igLink} target="_blank" rel="noopener noreferrer">
-                  <Instagram size={31} className="text-black" />
-                </a>
-              )}
-              {tiktokLink && (
-                <a href={tiktokLink} target="_blank" rel="noopener noreferrer">
-                  <Image src={tiktok} width={31} height={31} alt="TikTok" />
-                </a>
-              )}
-              {xLink && (
-                <a href={xLink} target="_blank" rel="noopener noreferrer">
-                  <Image src={twitter} width={31} height={31} alt="X" />
-                </a>
-              )}
+              <div className="flex min-w-[118px] cursor-pointer items-center justify-center rounded-[30px] bg-[#ffffff76] px-[16px] text-[17px] font-black tracking-[0.08em] text-[#243344] h-[48px] uppercase">
+                <Zap size={20} className="mr-[8px]" /> {planLabel}
+              </div>
+              {/* <div className="flex cursor-pointer text-[30px] leading-none items-center justify-center font-mdeium bg-[#ffffff76] rounded-[100%] w-[45px] h-[45px]">
+                <Plus />
+              </div> */}
+            </div>
+            <div
+              className="account_button flex cursor-pointer justify-center items-center bg-[#ffffff76] rounded-[100px] h-[48px] w-[48px]"
+              onClick={() => setShowAccount(true)}
+            >
+              <CircleUserRound size={36} />
             </div>
           </div>
 
@@ -164,31 +415,13 @@ export default function Home() {
           )}
 
           {!aiResponse && (
-            <>
-              <button
-                onClick={handleSubmit}
-                disabled={isLoading}
-                className="submit_button mt-[30px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  "Processing..."
-                ) : (
-                  <span className="flex items-center justify-center">
-                    SUBMIT{" "}
-                    {/* <span className="ml-[15px] flex items-center font-semibold">
-                      <Zap className="mr-[2px]" />1
-                    </span> */}
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowDonate(true)}
-                className="submit_button flex items-center justify-center mt-[15px] text-white text-[26px] font-bold w-full rounded-[14px] bg-[#0f0f0f] h-[50px]"
-              >
-                Support Us (50% to 🇵🇸)
-              </button>
-            </>
+            <button
+              onClick={handleSubmit}
+              disabled={isLoading}
+              className="submit_button mt-[30px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? "Processing..." : "SUBMIT"}
+            </button>
           )}
 
           {aiResponse && warning && (
@@ -212,19 +445,91 @@ export default function Home() {
               <div className="life_affection">
                 <h3 className="text-[22px] font-semibold">
                   Your life has been affected by Israel for:{" "}
-                  <span className="font-black">
-                    {parsed?.percentage ?? "--"}%
-                  </span>
+                  <span className="font-black">{aiResponse.percentage}%</span>
                 </h3>
               </div>
               <div className="divider"></div>
               <div className="breakdown">
                 <h3 className="font-semibold text-[22px]">Breakdown:</h3>
-                <div className="prose prose-sm mt-[10px] text-[#414141]">
-                  <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
-                    {parsed?.breakdownMD || ""}
-                  </ReactMarkdown>
-                </div>
+                {!shouldBlurBreakdown && (
+                  <div className="prose prose-sm mt-[10px] text-[#414141]">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeSanitize]}
+                      components={markdownComponents}
+                    >
+                      {aiResponse.breakdownMD || ""}
+                    </ReactMarkdown>
+                  </div>
+                )}
+
+                {shouldBlurBreakdown && (
+                  // <div className="prose prose-sm mt-[10px] text-[#414141]">
+                  //   <ReactMarkdown
+                  //     remarkPlugins={[remarkGfm]}
+                  //     rehypePlugins={[rehypeSanitize]}
+                  //   >
+                  //     {aiResponse.breakdownMD || ""}
+                  //   </ReactMarkdown>
+                  // </div>
+                  <div className="mt-[14px] radius-[30px] overflow-hidden">
+                    <div className="relative h-[258px] overflow-hidden  ">
+                      <div className="pointer-events-none absolute inset-x-0 top-0 h-[120px] " />
+
+                      {/* <div className="relative z-30 max-w-[92%]">
+                        {lockedBreakdownPreview.heading && (
+                          <p className="text-[15px] font-semibold leading-[1.35] text-[#2f3f50]">
+                            {lockedBreakdownPreview.heading}
+                          </p>
+                        )}
+                        {lockedBreakdownPreview.body && (
+                          <p
+                            className="mt-[8px] text-[15px] leading-[1.65] text-[#45596d]"
+                            style={{
+                              display: "-webkit-box",
+                              WebkitBoxOrient: "vertical",
+                              WebkitLineClamp: 2,
+                              overflow: "hidden",
+                            }}
+                          >
+                            {lockedBreakdownPreview.body}
+                          </p>
+                        )}
+                      </div> */}
+
+                      {/* <div className="absolute inset-x-[20px] top-[88px] bottom-[18px] z-10 overflow-hidden"> */}
+                        {/* <div className="prose prose-sm max-w-none text-[#4b6074] opacity-75 blur-[6px]"> */}
+                          <div className="p-[10px]">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            rehypePlugins={[rehypeSanitize]}
+                            components={markdownComponents}
+                          >
+                            {aiResponse.breakdownMD}
+                          </ReactMarkdown>
+                          </div>
+                        {/* </div> */}
+                      {/* </div> */}
+                      <div className="bg-[#f5f8fb51] inset-0 radius-[10px] absolute top-0 h-full w-full bd_blur"></div>
+                      <div className="bg-[#f5f8fb51] inset-0 radius-[10px] absolute top-0 h-full w-full bd_blur"></div>
+                      <div className="bg-[#f5f8fb51] inset-0 radius-[10px] absolute top-0 h-full w-full bd_blur"></div>
+
+                      <div className="absolute inset-0 rounded-[5px] z-30 flex flex-col items-center justify-center ] px-[20px] text-center ">
+                        <p className="text-[24px] font-bold tracking-[-0.03em] text-[#232323]">
+                          {userPlan === "plan_cheap"
+                            ? "Upgrade for full breakdown"
+                            : "Get full breakdown"}
+                        </p>
+                        <button
+                          onClick={() => setShowBuy(true)}
+                          className="submit_button mt-[14px] flex h-[50px] min-w-[176px] items-center justify-center rounded-[16px] bg-white px-[28px] text-[21px] font-bold text-[#0f0f0f] shadow-[0_12px_30px_rgba(73,112,153,0.16)]"
+                        >
+                          Upgrade
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="mt-[14px]">
@@ -242,24 +547,106 @@ export default function Home() {
           )}
 
           {aiResponse && (
-            <>
-              <button
-                type="button"
-                onClick={() => setShowDonate(true)}
-                className="submit_button flex items-center justify-center mt-[30px] text-white text-[26px] font-bold w-full rounded-[14px] bg-[#0f0f0f] h-[50px]"
-              >
-                Support Us (50% to 🇵🇸)
-              </button>
-              <button
-                onClick={() => setAiResponse(null)}
-                className="submit_button flex items-center justify-center mt-[15px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                USE AGAIN{" "}
-                {/* <span className="ml-[15px] flex items-center font-semibold">
-                  <Zap className="mr-[2px]" />1
-                </span> */}
-              </button>
-            </>
+            <button
+              onClick={() => setAiResponse(null)}
+              className="submit_button flex items-center justify-center mt-[30px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              USE AGAIN
+            </button>
+          )}
+
+          {showAuth && (
+            <SignUpForm
+              selectedPlanKey={selectedPlanKey}
+              onAuthSuccess={(nextUser) => {
+                if (nextUser) {
+                  setUser(nextUser);
+                }
+              }}
+              onLogin={(planKey) => {
+                setShowAuth(false);
+                setShowLogin(true);
+                setSelectedPlanKey(planKey ?? null);
+              }}
+              onClose={() => {
+                setShowAuth(false);
+                if (selectedPlanKey) {
+                  setShowBuy(true);
+                }
+              }}
+            />
+          )}
+          {showLogin && (
+            <LoginForm
+              selectedPlanKey={selectedPlanKey}
+              onAuth={(planKey) => {
+                setShowLogin(false);
+                setShowAuth(true);
+                setSelectedPlanKey(planKey ?? null);
+              }}
+              onAuthSuccess={async () => {
+                await refreshCurrentUser();
+              }}
+              onClose={() => {
+                setShowLogin(false);
+                if (selectedPlanKey) {
+                  setShowBuy(true);
+                }
+              }}
+              onReset={() => setResetPassword(true)}
+            />
+          )}
+          {resetPassword && (
+            <ForgotPasswordForm
+              onLogin={() => setShowLogin(true)}
+              onClose={() => {
+                setResetPassword(false);
+              }}
+            />
+          )}
+          {showBuy && (
+            <BuyModal
+              user={user}
+              onSelectPlan={(planKey) => {
+                setSelectedPlanKey(planKey);
+                localStorage.setItem(PENDING_PLAN_STORAGE_KEY, planKey);
+                setShowBuy(false);
+                setShowAuth(true);
+              }}
+              onClose={() => {
+                setShowBuy(false);
+              }}
+            />
+          )}
+
+          {showAccount && user ? (
+            <AccountModal
+              onClose={() => setShowAccount(false)}
+              logOut={handleLogOut}
+              user={user}
+              onDelete={() => setConfirmDelete(true)}
+            />
+          ) : showAccount && !user ? (
+            <LoginForm
+              onAuth={() => {
+                setSelectedPlanKey(null);
+                setShowAuth(true);
+              }}
+              onClose={() => {
+                setShowLogin(false);
+                setShowAccount(false);
+              }}
+              onReset={() => setResetPassword(true)}
+            />
+          ) : (
+            ""
+          )}
+
+          {confirmDelete && (
+            <ConfirmDelete
+              onAccDelete={handleDeleteAccount}
+              onClose={() => setConfirmDelete(false)}
+            />
           )}
         </div>
       </div>

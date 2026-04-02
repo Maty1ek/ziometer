@@ -31,7 +31,7 @@ export default function Success() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4 text-center">
       <h1 className="text-2xl font-bold mb-4">Payment Successful!</h1>
-      <p className="text-lg mb-2">Your tokens have been added. Current balance:</p>
+      <p className="text-lg mb-2">Your plan purchase was received and your access is being updated.</p>
       <p className="text-sm text-gray-600">Redirecting to home in 5 seconds...</p>
     </div>
   );
