@@ -71,11 +71,6 @@ export default function BuyModal({ user, onClose, onSelectPlan }) {
                   key={key}
                   type="button"
                   onClick={() => {
-                    if (!user?.id) {
-                      onSelectPlan?.(key);
-                      return;
-                    }
-
                     setSelectedPlan(key);
                   }}
                   disabled={Boolean(loadingPlan)}
@@ -152,13 +147,9 @@ export default function BuyModal({ user, onClose, onSelectPlan }) {
                 type="button"
                 onClick={() => handleBuy(selectedPlan)}
                 disabled={!selectedPlan || Boolean(loadingPlan)}
-                className="submit_button flex h-[54px] w-full items-center justify-center rounded-[16px] bg-[#13202f] px-[18px] text-[18px] font-black text-white transition hover:bg-[#1b2d42] disabled:cursor-not-allowed disabled:opacity-60 sm:h-[58px] sm:rounded-[18px] sm:text-[20px]"
+                className="submit_button flex h-[48px] w-full items-center justify-center rounded-[16px] bg-[#13202f] px-[18px] text-[16px] font-black text-white transition hover:bg-[#1b2d42] disabled:cursor-not-allowed disabled:opacity-60 sm:h-[52px] sm:rounded-[18px] sm:text-[18px]"
               >
-                {loadingPlan
-                  ? "Redirecting to checkout..."
-                  : user?.id
-                    ? "Continue to Checkout"
-                    : "Create Account to Continue"}
+                {loadingPlan ? "Redirecting to checkout..." : "Continue"}
               </button>
 
               <button

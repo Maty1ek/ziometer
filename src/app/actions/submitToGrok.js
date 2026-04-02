@@ -122,14 +122,14 @@ export async function submitToGrok(countries) {
     : SYSTEM_PROMPT_FREE;
 
   try {
-    const response = await fetchWithRetry("https://api.x.ai/v1/chat/completions", {
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "grok-4-fast-reasoning", // Confirm this model is available in your tier
+        model: "grok-4-fast-reasoning", // Use 'grok-4' if available via your plan; check xAI docs for latest models
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
@@ -138,6 +138,7 @@ export async function submitToGrok(countries) {
         max_tokens: 5524, // Limit response length
         stream: false,
       }),
+      // Note: fetch doesn't have built-in timeout; use AbortController for production if needed
     });
 
     const responseText = await response.text();
@@ -180,6 +181,6 @@ export async function submitToGrok(countries) {
     }
   } catch (err) {
     console.error("Grok API error:", err);
-    throw err; // Rethrow to handle in client (e.g., show a user-friendly message)
+    throw err; // Rethrow to handle in client
   }
 }

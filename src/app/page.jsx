@@ -1,21 +1,23 @@
 "use client";
 import Image from "next/image";
 import bgCircles from "../../public/bg_circles.svg";
-import { CircleUserRound, Instagram, Share2, Plus, XIcon, Zap } from "lucide-react";
+import tiktokIcon from "../../public/tiktok_icon.svg";
+import xIcon from "../../public/twitter_icon.webp";
+import { CircleUserRound, Instagram, MessageCircle, Plus, XIcon, Zap } from "lucide-react";
 import MainInputs from "@/components/main-inputs";
 import BuyModal from "@/components/BuyModal";
 import { useState, useEffect, Suspense, useCallback } from "react";
 import { submitToGrok } from "@/app/actions/submitToGrok";
-// import { SignUpForm } from "@/components/sign-up-form";
-// import { LoginForm } from "@/components/login-form";
-// import { ForgotPasswordForm } from "@/components/forgot-password-form";
-// // import { useRouter } from "next/navigation";
-// import AccountModal from "@/components/AccountModal";
-// import ConfirmDelete from "@/components/ConfirmDelete";
-// import { supabaseClient } from "@/lib/supabaseClient";
+import { SignUpForm } from "@/components/sign-up-form";
+import { LoginForm } from "@/components/login-form";
+import { ForgotPasswordForm } from "@/components/forgot-password-form";
+// import { useRouter } from "next/navigation";
+import AccountModal from "@/components/AccountModal";
+import ConfirmDelete from "@/components/ConfirmDelete";
+import { supabaseClient } from "@/lib/supabaseClient";
 import SearchParamsHandler from "@/components/SearchParamsHandler";
 import ReactMarkdown from "react-markdown";
-// import remarkGfm from "remark-gfm";
+import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import {
   getPlanDisplayName,
@@ -108,6 +110,7 @@ export default function Home() {
   const igLink = process.env.NEXT_PUBLIC_SOCIAL_INSTA_LINK;
   const tiktokLink = process.env.NEXT_PUBLIC_SOCIAL_TIKTOK_LINK;
   const xLink = process.env.NEXT_PUBLIC_SOCIAL_X_LINK;
+  const discordLink = process.env.NEXT_PUBLIC_SOCIAL_DISCORD_LINK;
 
   const [countries, setCountries] = useState([{ country: "", years: "" }]);
   const [isLoading, setIsLoading] = useState(false);
@@ -118,8 +121,6 @@ export default function Home() {
   const [showLogin, setShowLogin] = useState(false);
   const [resetPassword, setResetPassword] = useState(false);
   const [showBuy, setShowBuy] = useState(false);
-  const [showDonate, setShowDonate] = useState(false);
-  const [showShare, setShowShare] = useState(false);
   const [warning, setWarning] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selectedPlanKey, setSelectedPlanKey] = useState(null);
@@ -242,6 +243,15 @@ export default function Home() {
   const planLabel = getPlanDisplayName(userPlan).toUpperCase();
   const showFullBreakdown = hasFullBreakdownAccess(userPlan);
   const shouldBlurBreakdown = !showFullBreakdown;
+  const accuracyValue = Number.isFinite(Number(aiResponse?.accuracy))
+    ? Math.max(0, Math.min(100, Math.round(Number(aiResponse?.accuracy))))
+    : 0;
+  const accuracyTone =
+    accuracyValue <= 40
+      ? { label: "Low", color: "#ff2222" }
+      : accuracyValue < 70
+        ? { label: "Medium", color: "#fff700" }
+        : { label: "High", color: "#00ff91" };
 
   const doSubmit = async (submissionCountries) => {
     if (isLoading) return; // Prevent double clicks
@@ -357,7 +367,7 @@ export default function Home() {
   );
 
   return (
-    <div className="relative min-h-screen flex justify-center pt-[5px]">
+    <div className="relative min-h-screen flex justify-center pt-[15px]">
       <Suspense fallback={null}>
         <SearchParamsHandler
           onPaymentSuccess={handlePaymentSuccess}
@@ -388,15 +398,64 @@ export default function Home() {
                 <Plus />
               </div> */}
             </div>
-            <div
-              className="account_button flex cursor-pointer justify-center items-center bg-[#ffffff76] rounded-[100px] h-[48px] w-[48px]"
-              onClick={() => setShowAccount(true)}
-            >
-              <CircleUserRound size={36} />
+            <div className="flex items-center gap-[8px]">
+              <div className="socials hidden md:flex items-center gap-[8px] bg-[#ffffff0f] h-[52px] rounded-[30px] px-[10px]">
+                {igLink && (
+                  <a
+                    href={igLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Instagram"
+                    className="flex h-[35px] w-[35px] items-center justify-center rounded-[999px] bg-[#ffffff80] text-[#243344] transition hover:bg-white"
+                  >
+                    <Instagram size={18} />
+                  </a>
+                )}
+                {tiktokLink && (
+                  <a
+                    href={tiktokLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="TikTok"
+                    className="flex h-[35px] w-[35px] items-center justify-center rounded-[999px] bg-[#ffffff80] transition hover:bg-white"
+                  >
+                    <Image src={tiktokIcon} width={18} height={18} alt="TikTok" />
+                  </a>
+                )}
+                {xLink && (
+                  <a
+                    href={xLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="X"
+                    className="flex h-[35px] w-[35px] items-center justify-center rounded-[999px] bg-[#ffffff80] transition hover:bg-white"
+                  >
+                    <Image src={xIcon} width={18} height={18} alt="X" />
+                  </a>
+                )}
+                {discordLink && (
+                  <a
+                    href={discordLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Discord"
+                    className="flex h-[35px] w-[35px] items-center justify-center rounded-[999px] bg-[#ffffff80] text-[#243344] transition hover:bg-white"
+                  >
+                    <MessageCircle size={18} />
+                  </a>
+                )}
+              </div>
+
+              <div
+                className="account_button flex cursor-pointer justify-center items-center bg-[#ffffff76] rounded-[100px] h-[48px] w-[48px]"
+                onClick={() => setShowAccount(true)}
+              >
+                <CircleUserRound size={36} />
+              </div>
             </div>
           </div>
 
-          <div className="headings mt-[55px] flex flex-col justify-center items-center text-white">
+          <div className="headings mt-[40px] flex flex-col justify-center items-center text-white">
             <div className="heading_title flex flex-col items-center">
               <h1 className="font-black text-[92px]">GREAT</h1>
               <h2 className="font-black text-[61px]">NOTICING</h2>
@@ -447,6 +506,24 @@ export default function Home() {
                   Your life has been affected by Israel for:{" "}
                   <span className="font-black">{aiResponse.percentage}%</span>
                 </h3>
+              </div>
+              <div className="divider"></div>
+              <div>
+                <h3 className="text-[22px] font-semibold">Accuracy: <span className="font-black">{accuracyTone.label} - {accuracyValue}% </span></h3>
+                <div className="w-full bg-[#ffffff65] border border-[#6a6a6a38] mt-[10px]  rounded-[10px] h-[10px] overflow-hidden">
+                  <div className='accuracy_bar h-full rounded-[10px]' style={{ width: `${accuracyValue}%`, backgroundColor: accuracyTone.color }}>
+                    
+                  </div>
+                </div>
+                  {!isPaidPlan(userPlan) && (
+                    <button
+                      type="button"
+                      onClick={() => setShowBuy(true)}
+                      className="submit_button mt-[25px] flex h-[35px] w-full items-center justify-center rounded-[14px] bg-white px-[20px] text-[20px] font-bold text-[#0f0f0f]"
+                    >
+                      Get higher accuracy
+                    </button>
+                  )}
               </div>
               <div className="divider"></div>
               <div className="breakdown">
@@ -515,14 +592,12 @@ export default function Home() {
                       <div className="bg-[#f5f8fb51] inset-0 radius-[10px] absolute top-0 h-full w-full bd_blur"></div>
 
                       <div className="absolute inset-0 rounded-[5px] z-30 flex flex-col items-center justify-center ] px-[20px] text-center ">
-                        <p className="text-[24px] font-bold tracking-[-0.03em] text-[#232323]">
-                          {userPlan === "plan_cheap"
-                            ? "Upgrade for full breakdown"
-                            : "Get full breakdown"}
+                        <p className="text-[28px] font-bold  text-[#080808]">
+                          Get full breakdown
                         </p>
                         <button
                           onClick={() => setShowBuy(true)}
-                          className="submit_button mt-[14px] flex h-[50px] min-w-[176px] items-center justify-center rounded-[16px] bg-white px-[28px] text-[21px] font-bold text-[#0f0f0f] shadow-[0_12px_30px_rgba(73,112,153,0.16)]"
+                          className="submit_button mt-[14px] flex h-[40px] min-w-[176px] items-center justify-center rounded-[16px] bg-white px-[28px] text-[21px] font-bold text-[#0f0f0f] shadow-[0_12px_30px_rgba(73,112,153,0.16)]"
                         >
                           Upgrade
                         </button>
@@ -530,18 +605,6 @@ export default function Home() {
                     </div>
                   </div>
                 )}
-              </div>
-
-              <div className="mt-[14px]">
-                <button
-                  type="button"
-                  onClick={() => setShowShare(true)}
-                  className="h-[40px] w-full rounded-[14px] font-black text-[18px] text-white shadow-sm hover:shadow-md hover:-translate-y-[1px] transition flex items-center justify-center gap-[10px] bg-gradient-to-r from-[#2563eb] to-[#4f46e5]"
-                  aria-label="Share results"
-                >
-                  <Share2 size={18} />
-                  Share Results
-                </button>
               </div>
             </div>
           )}
@@ -648,20 +711,55 @@ export default function Home() {
               onClose={() => setConfirmDelete(false)}
             />
           )}
+
+<div className="socials flex md:hidden items-center gap-[11px] bg-[#ffffff0f] h-[62px] rounded-[34px] mt-[20px] px-[14px]">
+                {igLink && (
+                  <a
+                    href={igLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Instagram"
+                    className="flex h-[42px] w-[42px] items-center justify-center rounded-[999px] bg-[#ffffff80] text-[#243344] transition hover:bg-white"
+                  >
+                    <Instagram size={22} />
+                  </a>
+                )}
+                {tiktokLink && (
+                  <a
+                    href={tiktokLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="TikTok"
+                    className="flex h-[42px] w-[42px] items-center justify-center rounded-[999px] bg-[#ffffff80] transition hover:bg-white"
+                  >
+                    <Image src={tiktokIcon} width={21} height={21} alt="TikTok" />
+                  </a>
+                )}
+                {xLink && (
+                  <a
+                    href={xLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="X"
+                    className="flex h-[42px] w-[42px] items-center justify-center rounded-[999px] bg-[#ffffff80] transition hover:bg-white"
+                  >
+                    <Image src={xIcon} width={21} height={21} alt="X" />
+                  </a>
+                )}
+                {discordLink && (
+                  <a
+                    href={discordLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Discord"
+                    className="flex h-[42px] w-[42px] items-center justify-center rounded-[999px] bg-[#ffffff80] text-[#243344] transition hover:bg-white"
+                  >
+                    <MessageCircle size={21} />
+                  </a>
+                )}
+              </div>
         </div>
       </div>
-      {showDonate && <DonateWindow onClose={() => setShowDonate(false)} />}
-      {showShare && (
-        <ShareResultsModal
-          open={showShare}
-          onClose={() => setShowShare(false)}
-          percentage={parsed?.percentage ?? ""}
-          onSupport={() => {
-            setShowShare(false);
-            setShowDonate(true);
-          }}
-        />
-      )}
     </div>
   );
 }
