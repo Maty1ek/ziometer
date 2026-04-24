@@ -4,7 +4,7 @@ import bgCircles from "../../public/bg_circles.svg";
 import discordIcon from "../../public/discord.png";
 import tiktokIcon from "../../public/tiktok_icon.svg";
 import xIcon from "../../public/twitter_icon.webp";
-import { CircleUserRound, Instagram, Plus, XIcon, Zap } from "lucide-react";
+import { CircleUserRound, Instagram, Lock, Plus, XIcon, Zap } from "lucide-react";
 import MainInputs from "@/components/main-inputs";
 import BuyModal from "@/components/BuyModal";
 import { useState, useEffect, Suspense, useCallback } from "react";
@@ -116,6 +116,7 @@ export default function Home() {
   const [countries, setCountries] = useState([{ country: "", years: "" }]);
   const [isLoading, setIsLoading] = useState(false);
   const [aiResponse, setAiResponse] = useState(null);
+  const [showLockedResult, setShowLockedResult] = useState(false);
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
@@ -133,6 +134,7 @@ export default function Home() {
   const resetMainState = useCallback(() => {
     setCountries([{ country: "", years: "" }]);
     setAiResponse(null);
+    setShowLockedResult(false);
     setWarning(false);
     setError(null);
   }, []);
@@ -294,6 +296,18 @@ export default function Home() {
     );
     if (validCountries.length === 0) {
       setError("Please enter at least one country and years.");
+      return;
+    }
+
+    if (!isPaidPlan(userPlan)) {
+      if (isLoading) return;
+      setIsLoading(true);
+      setError(null);
+      setAiResponse(null);
+      setShowLockedResult(false);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      setShowLockedResult(true);
+      setIsLoading(false);
       return;
     }
 
@@ -474,7 +488,7 @@ export default function Home() {
             </div>
           )}
 
-          {!aiResponse && (
+          {!aiResponse && !showLockedResult && (
             <button
               onClick={handleSubmit}
               disabled={isLoading}
@@ -482,6 +496,46 @@ export default function Home() {
             >
               {isLoading ? "Processing..." : "SUBMIT"}
             </button>
+          )}
+
+          {showLockedResult && (
+            <div className="w-full result-block mt-[16px]">
+              <div className="response_box relative overflow-hidden" style={{ height: 400 }}>
+                <h3 className="relative z-10 text-[18px] font-black text-[#1a1a1a] mb-3">Results</h3>
+
+                <div
+                  className="flex flex-col gap-3 select-none pointer-events-none"
+                  style={{ filter: "blur(2px)", WebkitFilter: "blur(2px)" }}
+                  aria-hidden="true"
+                >
+                  <p className="text-[14px] leading-relaxed text-[#333]">
+                    Based on our deep research across public records, social media, interviews, business filings, and verified news sources, we found multiple notable findings about this individual. Connections include documented associations, financial links, recorded public appearances, and statements made across various platforms over the past decade.
+                  </p>
+                  <p className="text-[14px] leading-relaxed text-[#333]">
+                    Additional context from archived sources reveals a pattern of affiliations that warrant further investigation. Cross-referencing with Epstein-related flight logs, donor records, and public political endorsements brings up relevant matches that align with the research categories.
+                  </p>
+                  <p className="text-[14px] leading-relaxed text-[#333]">
+                    Analysis includes verified interviews, social graph relationships, business partnerships, and publicly declared ideological positions. All findings are cross-checked with trusted third-party sources before being surfaced.
+                  </p>
+                  <p className="text-[14px] leading-relaxed text-[#333]">
+                    Our research engine has identified connections to one or more of the following categories: Jews, Zionists, Israelis, pro-Zionists, pro-Israelis, or Jeffrey Epstein&apos;s network.
+                  </p>
+                </div>
+
+                <div className="absolute inset-0 flex flex-col items-center justify-center rounded-[16px] bg-[#ffffff80] backdrop-blur-[14px]">
+                  <Lock size={28} className="text-[#555] mb-3" />
+                  <p className="font-black text-[20px] text-[#1a1a1a] mb-4 text-center leading-tight">
+                    Upgrade to see<br />the full results
+                  </p>
+                  <button
+                    onClick={() => setShowBuy(true)}
+                    className="h-[46px] px-10 rounded-[12px] bg-[#1a1a1a] text-white font-bold text-[14px] uppercase tracking-[1.5px] hover:bg-[#333] active:scale-[0.98] transition-all"
+                  >
+                    Upgrade
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           {aiResponse && warning && (
@@ -610,9 +664,12 @@ export default function Home() {
             </div>
           )}
 
-          {aiResponse && (
+          {(aiResponse || showLockedResult) && (
             <button
-              onClick={() => setAiResponse(null)}
+              onClick={() => {
+                setAiResponse(null);
+                setShowLockedResult(false);
+              }}
               className="submit_button flex items-center justify-center mt-[30px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               USE AGAIN

@@ -1,6 +1,5 @@
 "use server";
 
-import { SYSTEM_PROMPT_FREE } from "@/lib/prompt-free";
 import { SYSTEM_PROMPT_PAID } from "@/lib/prompt-paid";
 import { isPaidPlan } from "@/lib/account";
 import { createClient } from "@/lib/supabase/server";
@@ -117,9 +116,12 @@ export async function submitToGrok(countries) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const systemPrompt = isPaidPlan(user?.user_metadata?.plan)
-    ? SYSTEM_PROMPT_PAID
-    : SYSTEM_PROMPT_FREE;
+
+  if (!isPaidPlan(user?.user_metadata?.plan)) {
+    throw new Error("A paid plan is required to run this analysis.");
+  }
+
+  const systemPrompt = SYSTEM_PROMPT_PAID;
 
   try {
     const response = await fetch("https://api.x.ai/v1/chat/completions", {
