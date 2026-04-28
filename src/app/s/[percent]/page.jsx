@@ -63,7 +63,7 @@ export default function SharedPercentPage({ params }) {
         >
           <p className="text-[20px] font-semibold text-[#475569]">
             My life has been affected by{" "}
-            <span className="font-black text-[#0091ff]">ISRAEL</span> for:
+            <span className="font-black text-[#0091ff]">PROCESSED FOOD</span> for:
           </p>
           <div className="flex-1 w-full flex items-center justify-center">
             <p className="text-[34px] leading-none font-black text-[#0f172a]">
