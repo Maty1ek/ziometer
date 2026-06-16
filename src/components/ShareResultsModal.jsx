@@ -93,7 +93,7 @@ export default function ShareResultsModal({
   }, []);
 
   const encodedText = useMemo(() => {
-    const text = `My life has been affected by PROCESSED FOOD for ${Math.round(
+    const text = `My life has been affected by ISRAEL for ${Math.round(
       Number(percentage) || 0,
     )}%. Try it: ${shareUrl}`;
     return encodeURIComponent(text);
@@ -130,7 +130,7 @@ export default function ShareResultsModal({
         if (!navigator.canShare({ files: [file] })) return false;
         await navigator.share({
           title: "Ziometer",
-          text: `My life has been affected by PROCESSED FOOD for ${rounded}%.`,
+          text: `My life has been affected by ISRAEL for ${rounded}%.`,
           files: [file],
         });
         return true;
@@ -173,7 +173,7 @@ export default function ShareResultsModal({
         >
           <p className="text-[20px] font-semibold text-[#475569]">
             My life has been affected by{" "}
-            <span className="font-black text-[#13a9ff]">PROCESSED FOOD</span> for:
+            <span className="font-black text-[#13a9ff]">ISRAEL</span> for:
           </p>
           <div className="flex-1 w-full flex items-center justify-center">
             <p className="text-[34px] leading-none font-black text-[#0f172a]">
@@ -296,7 +296,7 @@ export default function ShareResultsModal({
           onClick={onSupport}
           className="submit_button mt-[20px] w-full h-[50px] rounded-[14px] bg-[#ffffff] text-[#222] font-black text-[18px]"
         >
-          Support the project
+          Support the project (50% to 🇵🇸)
         </button>
       </div>
     </div>

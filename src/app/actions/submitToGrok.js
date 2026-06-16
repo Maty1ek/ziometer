@@ -105,7 +105,7 @@ export async function submitToGrok(countries) {
     .map((row) => `- ${row.country} for ${row.years} years`)
     .join(
       "\n"
-    )}\n\nAnalyze processed food's influence: percentage of life affected, and MD breakdown. Return only a valid JSON object.`;
+    )}\n\nAnalyze Israel's influence: percentage of life affected, and MD breakdown. Return only a valid JSON object.`;
 
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) {

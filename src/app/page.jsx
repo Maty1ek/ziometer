@@ -476,7 +476,7 @@ export default function Home() {
               <h2 className="font-black text-[61px]">NOTICING</h2>
             </div>
             <p className="heading_text text-center text-[18px] w-[300px] mt-[25px]">
-              Find out how much of your life has been affected by processed food
+              Find out how much of your life has been affected by Israel
             </p>
           </div>
 
@@ -509,16 +509,16 @@ export default function Home() {
                   aria-hidden="true"
                 >
                   <p className="text-[14px] leading-relaxed text-[#333]">
-                    Based on dietary research, public health data, food industry reports, and country-level consumption studies, we identified significant processed food exposure patterns for the countries and years you entered. Results include market penetration rates, key industry events, and policy changes that affected your diet environment.
+                    Based on our deep research across public records, social media, interviews, business filings, and verified news sources, we found multiple notable findings about this individual. Connections include documented associations, financial links, recorded public appearances, and statements made across various platforms over the past decade.
                   </p>
                   <p className="text-[14px] leading-relaxed text-[#333]">
-                    Additional context from nutritional epidemiology and food systems data reveals how ultra-processed food availability, advertising density, and government dietary guidelines shaped your food environment during each residency period.
+                    Additional context from archived sources reveals a pattern of affiliations that warrant further investigation. Cross-referencing with Epstein-related flight logs, donor records, and public political endorsements brings up relevant matches that align with the research categories.
                   </p>
                   <p className="text-[14px] leading-relaxed text-[#333]">
-                    Analysis cross-references WHO nutrition data, NOVA classification research, national food surveys, and food industry market reports to calculate your overall exposure score.
+                    Analysis includes verified interviews, social graph relationships, business partnerships, and publicly declared ideological positions. All findings are cross-checked with trusted third-party sources before being surfaced.
                   </p>
                   <p className="text-[14px] leading-relaxed text-[#333]">
-                    Our research engine has identified significant exposure to processed food environments, including ultra-processed food consumption patterns, fast food density, food advertising saturation, and diet-related health trends in the regions analyzed.
+                    Our research engine has identified connections to one or more of the following categories: Jews, Zionists, Israelis, pro-Zionists, pro-Israelis, or Jeffrey Epstein&apos;s network.
                   </p>
                 </div>
 
@@ -558,7 +558,7 @@ export default function Home() {
             <div className="response_box w-full text-[#414141]">
               <div className="life_affection">
                 <h3 className="text-[22px] font-semibold">
-                  Your life has been affected by processed food for:{" "}
+                  Your life has been affected by Israel for:{" "}
                   <span className="font-black">{aiResponse.percentage}%</span>
                 </h3>
               </div>
