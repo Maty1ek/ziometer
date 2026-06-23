@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
 export async function POST() {
@@ -13,7 +14,11 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { error: deleteError } = await supabase.auth.admin.deleteUser(user.id);
+    // admin.deleteUser requires the service-role key, so use the admin client.
+    // The user is identified from their own verified session above.
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(
+      user.id
+    );
 
     if (deleteError) {
       console.error("Supabase admin delete error:", deleteError);

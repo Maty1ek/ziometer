@@ -3,11 +3,20 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { whopsdk } from "@/lib/whop";
 
 export async function POST(request) {
-  try {
-    const requestBodyText = await request.text();
-    const headers = Object.fromEntries(request.headers);
-    const webhookData = whopsdk.webhooks.unwrap(requestBodyText, { headers });
+  const requestBodyText = await request.text();
+  const headers = Object.fromEntries(request.headers);
 
+  // Verify the signature. A failure here means the request is not a trusted
+  // Whop webhook, so reject it (4xx) rather than acknowledging it.
+  let webhookData;
+  try {
+    webhookData = whopsdk.webhooks.unwrap(requestBodyText, { headers });
+  } catch (err) {
+    console.error("Webhook signature verification failed:", err);
+    return new Response("Invalid signature", { status: 400 });
+  }
+
+  try {
     if (webhookData.type === "payment.succeeded") {
       const payment = webhookData.data;
       const metadata = payment.metadata;
@@ -19,29 +28,31 @@ export async function POST(request) {
           await supabaseAdmin.auth.admin.getUserById(userId);
 
         if (userError) {
-          console.error("Error fetching user during webhook:", userError);
-        } else {
-          const currentMetadata = userData.user?.user_metadata ?? {};
-          const { error: updateError } =
-            await supabaseAdmin.auth.admin.updateUserById(userId, {
-              user_metadata: {
-                ...currentMetadata,
-                plan: purchasedPlan,
-              },
-            });
+          throw new Error(`Failed to fetch user ${userId}: ${userError.message}`);
+        }
 
-          if (updateError) {
-            console.error("Error updating purchased plan:", updateError);
-          }
+        const currentMetadata = userData.user?.user_metadata ?? {};
+        const { error: updateError } =
+          await supabaseAdmin.auth.admin.updateUserById(userId, {
+            user_metadata: {
+              ...currentMetadata,
+              plan: purchasedPlan,
+            },
+          });
+
+        if (updateError) {
+          throw new Error(`Failed to update plan: ${updateError.message}`);
         }
       } else {
+        // Nothing actionable in the metadata — acknowledge so Whop stops retrying.
         console.error("Missing plan metadata for payment succeeded:", metadata);
       }
     }
 
     return new Response("OK", { status: 200 });
   } catch (err) {
+    // Genuine processing failure: return 5xx so Whop retries delivery.
     console.error("Webhook processing error:", err);
-    return new Response("OK", { status: 200 });
+    return new Response("Processing error", { status: 500 });
   }
 }

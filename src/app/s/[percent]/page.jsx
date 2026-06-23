@@ -2,8 +2,9 @@ import Link from "next/link";
 import Image from "next/image";
 import bgCircles from "../../../../public/bg_circles.svg";
 
-export default function SharedPercentPage({ params }) {
-  const raw = params?.percent ?? "";
+export default async function SharedPercentPage({ params }) {
+  const { percent } = await params;
+  const raw = percent ?? "";
   const value = Number(raw);
   const safe = Number.isFinite(value) ? Math.round(value) : NaN;
   const clamped = Number.isNaN(safe)

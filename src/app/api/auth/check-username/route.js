@@ -23,8 +23,16 @@ async function isUsernameTaken(username) {
 
     const users = data?.users ?? [];
     const taken = users.some((user) => {
-      const storedUsername = normalizeUsername(user.user_metadata?.username || "");
       const storedEmail = (user.email || "").toLowerCase();
+
+      // This Supabase project is shared with other apps. Only consider accounts
+      // in ziometer's own email namespace so usernames don't collide with users
+      // that belong to those other apps.
+      if (!storedEmail.endsWith("@accounts.ziometer.app")) {
+        return false;
+      }
+
+      const storedUsername = normalizeUsername(user.user_metadata?.username || "");
 
       return storedUsername === normalizedUsername || storedEmail === generatedEmail;
     });
