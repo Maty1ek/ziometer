@@ -20,13 +20,16 @@ export async function createWhopCheckout(planKey) {
     throw new Error("Invalid plan selected");
   }
 
+  // Normalize away any trailing slash so we don't produce "//?payment=success".
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, "");
+
   const checkoutConfig = await whopsdk.checkoutConfigurations.create({
     plan_id: plan.id,
-    redirect_url: `${process.env.NEXT_PUBLIC_APP_URL}/?payment=success`,
+    redirect_url: `${appUrl}/?payment=success`,
     metadata: {
       user_id: user.id,
       plan_key: planKey,
-      purchased_plan: plan.supabasePlan,
+      purchased_plan: plan.gnPlan,
     },
   });
 

@@ -1,6 +1,7 @@
 // app/api/webhooks/route.ts
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { whopsdk } from "@/lib/whop";
+import { PLANS } from "@/lib/plans";
 
 export async function POST(request) {
   const requestBodyText = await request.text();
@@ -31,12 +32,21 @@ export async function POST(request) {
           throw new Error(`Failed to fetch user ${userId}: ${userError.message}`);
         }
 
-        const currentMetadata = userData.user?.user_metadata ?? {};
+        const currentAppMetadata = userData.user?.app_metadata ?? {};
+
+        // Seed the usage counter for the limited plan; unlimited plans get null
+        // (no counter). PLANS[key].queryLimit is 3 for three_uses, null otherwise.
+        const usesRemaining = PLANS[purchasedPlan]?.queryLimit ?? null;
+
+        // Entitlement is stored in app_metadata, which is writable ONLY through
+        // the service-role admin API — never from the browser. This is what makes
+        // the plan un-forgeable by a logged-in user.
         const { error: updateError } =
           await supabaseAdmin.auth.admin.updateUserById(userId, {
-            user_metadata: {
-              ...currentMetadata,
+            app_metadata: {
+              ...currentAppMetadata,
               plan: purchasedPlan,
+              uses_remaining: usesRemaining,
             },
           });
 

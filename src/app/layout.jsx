@@ -1,6 +1,7 @@
 import "./globals.css";
 import { Inter } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/next';
+import BottomNav from '@/components/BottomNav';
 
 const inter = Inter({
   subsets: ['latin'],  // Add 'latin-ext' if needed for extended chars
@@ -15,6 +16,7 @@ export default function RootLayout({ children }) {
         className={inter.className}
       >
         {children}
+        <BottomNav/>
         <Analytics/>
       </body>
     </html>

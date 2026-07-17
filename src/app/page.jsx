@@ -6,9 +6,13 @@ import tiktokIcon from "../../public/tiktok_icon.svg";
 import xIcon from "../../public/twitter_icon.webp";
 import { CircleUserRound, Instagram, Lock, Plus, XIcon, Zap } from "lucide-react";
 import MainInputs from "@/components/main-inputs";
-import BuyModal from "@/components/BuyModal";
+import ToolTabs from "@/components/ToolTabs";
+import FigureInput from "@/components/FigureInput";
+import ShowResults from "@/components/ShowResults";
+import PlansModal from "@/components/PlansModal";
 import { useState, useEffect, Suspense, useCallback } from "react";
 import { submitToGrok } from "@/app/actions/submitToGrok";
+import { createWhopCheckout } from "@/app/actions/createWhopCheckout";
 import { SignUpForm } from "@/components/sign-up-form";
 import { LoginForm } from "@/components/login-form";
 import { ForgotPasswordForm } from "@/components/forgot-password-form";
@@ -25,7 +29,9 @@ import {
   hasFullBreakdownAccess,
   isPaidPlan,
   PENDING_PLAN_STORAGE_KEY,
+  OAUTH_CHECKOUT_PLAN_KEY,
 } from "@/lib/account";
+import { FREE_MODE } from "@/lib/free-mode";
 
 const stripMarkdownInline = (value = "") =>
   value
@@ -113,11 +119,19 @@ export default function Home() {
   const xLink = process.env.NEXT_PUBLIC_SOCIAL_X_LINK;
   const discordLink = process.env.NEXT_PUBLIC_SOCIAL_DISCORD_LINK;
 
+  const [activeTool, setActiveTool] = useState("noticing");
+
   const [countries, setCountries] = useState([{ country: "", years: "" }]);
   const [isLoading, setIsLoading] = useState(false);
   const [aiResponse, setAiResponse] = useState(null);
   const [showLockedResult, setShowLockedResult] = useState(false);
   const [error, setError] = useState(null);
+
+  // Public Figure tool state (independent of the Noticing tool above).
+  const [personName, setPersonName] = useState("");
+  const [figureLoading, setFigureLoading] = useState(false);
+  const [figureResponse, setFigureResponse] = useState(null);
+  const [figureIsPaid, setFigureIsPaid] = useState(false);
   const [user, setUser] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
@@ -130,6 +144,62 @@ export default function Home() {
   const [showAccount, setShowAccount] = useState(false);
 
   const [isPollingPayment, setIsPollingPayment] = useState(false);
+
+  // The bottom-nav Account button links to /#account (works from any route).
+  // Open the account modal when that hash is present, then clear it.
+  useEffect(() => {
+    const openFromHash = () => {
+      if (typeof window === "undefined") return;
+      if (window.location.hash === "#account") {
+        setShowAccount(true);
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+      // Preview the paywall even while FREE_MODE hides its normal triggers.
+      if (window.location.hash === "#plans") {
+        setShowBuy(true);
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    };
+    openFromHash();
+    window.addEventListener("hashchange", openFromHash);
+    return () => window.removeEventListener("hashchange", openFromHash);
+  }, []);
+
+  // Resume checkout after a Google sign-in. OAuth navigates away, so unlike the
+  // username flow we can't start checkout inline — we stash the plan before the
+  // redirect and finish here once the user is back and logged in.
+  useEffect(() => {
+    const pendingPlan =
+      typeof window !== "undefined"
+        ? localStorage.getItem(OAUTH_CHECKOUT_PLAN_KEY)
+        : null;
+    if (!pendingPlan) return;
+
+    // In FREE_MODE there's no checkout; just clear the intent.
+    if (FREE_MODE) {
+      localStorage.removeItem(OAUTH_CHECKOUT_PLAN_KEY);
+      return;
+    }
+
+    (async () => {
+      try {
+        const currentUser = await refreshCurrentUser();
+        localStorage.removeItem(OAUTH_CHECKOUT_PLAN_KEY);
+
+        // OAuth failed, or the user already has the plan → nothing to buy.
+        if (!currentUser?.id) return;
+        if (isPaidPlan(currentUser?.app_metadata?.plan)) return;
+
+        localStorage.setItem(PENDING_PLAN_STORAGE_KEY, pendingPlan);
+        const checkoutUrl = await createWhopCheckout(pendingPlan);
+        window.location.href = checkoutUrl;
+      } catch (err) {
+        console.error("OAuth checkout continuation failed:", err);
+        localStorage.removeItem(OAUTH_CHECKOUT_PLAN_KEY);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const resetMainState = useCallback(() => {
     setCountries([{ country: "", years: "" }]);
@@ -186,7 +256,7 @@ export default function Home() {
         try {
           const nextUser = await refreshCurrentUser();
 
-          if (isPaidPlan(nextUser?.user_metadata?.plan)) {
+          if (isPaidPlan(nextUser?.app_metadata?.plan)) {
             setIsPollingPayment(false);
             setSelectedPlanKey(null);
             localStorage.removeItem(PENDING_PLAN_STORAGE_KEY);
@@ -242,9 +312,9 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const userPlan = user?.user_metadata?.plan ?? "";
+  const userPlan = user?.app_metadata?.plan ?? "";
   const planLabel = getPlanDisplayName(userPlan).toUpperCase();
-  const showFullBreakdown = hasFullBreakdownAccess(userPlan);
+  const showFullBreakdown = FREE_MODE || hasFullBreakdownAccess(userPlan);
   const shouldBlurBreakdown = !showFullBreakdown;
   const accuracyValue = Number.isFinite(Number(aiResponse?.accuracy))
     ? Math.max(0, Math.min(100, Math.round(Number(aiResponse?.accuracy))))
@@ -299,7 +369,7 @@ export default function Home() {
       return;
     }
 
-    if (!isPaidPlan(userPlan)) {
+    if (!FREE_MODE && !isPaidPlan(userPlan)) {
       if (isLoading) return;
       setIsLoading(true);
       setError(null);
@@ -312,6 +382,53 @@ export default function Home() {
     }
 
     await doSubmit(validCountries);
+  };
+
+  const switchTool = (tool) => {
+    if (tool === activeTool) return;
+    setActiveTool(tool);
+    setError(null);
+  };
+
+  const handleFigureSubmit = async () => {
+    if (figureLoading) return;
+
+    const name = personName.trim();
+    if (!name) {
+      setError("Please enter a person's name.");
+      return;
+    }
+
+    setFigureLoading(true);
+    setError(null);
+    setFigureResponse(null);
+
+    try {
+      const response = await fetch("/api/research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+
+      const data = await response.json();
+
+      if (response.status === 403) {
+        // Paywalled (only reachable when FREE_MODE is off).
+        setShowBuy(true);
+        return;
+      }
+
+      if (!response.ok || data.error) {
+        throw new Error(data.error || "Error processing request. Please try again.");
+      }
+
+      setFigureResponse(data.result);
+      setFigureIsPaid(Boolean(data.paid));
+    } catch (err) {
+      setError(err.message || "Error processing request. Please try submitting again.");
+    } finally {
+      setFigureLoading(false);
+    }
   };
 
   const handleLogOut = async () => {
@@ -400,7 +517,7 @@ export default function Home() {
         </div>
       </div>
       <div className="flex flex-col justify-center items-center relative w-full max-w-[500px] mx-auto">
-        <div className="mainCon z-10 flex flex-col px-[20px] items-center w-full min-w-[308px] pt-[15px] h-full pb-[40px]">
+        <div className="mainCon z-10 flex flex-col px-[20px] items-center w-full min-w-[308px] pt-[15px] h-full pb-[110px]">
           <div className="heading_buttons w-full px-[0px] flex justify-between text-[#414141]">
             <div
               className="burger_button flex items-center gap-[10px]"
@@ -475,12 +592,28 @@ export default function Home() {
               <h1 className="font-black text-[92px]">GREAT</h1>
               <h2 className="font-black text-[61px]">NOTICING</h2>
             </div>
-            <p className="heading_text text-center text-[18px] w-[300px] mt-[25px]">
-              Find out how much of your life has been affected by Israel
-            </p>
           </div>
 
-          <MainInputs countries={countries} setCountries={setCountries} />
+          <ToolTabs activeTool={activeTool} onChange={switchTool} />
+
+          <div className="flex flex-col items-center text-white mt-[24px]">
+            {activeTool === "noticing" ? (
+              <p className="heading_text text-center text-[18px] w-[300px]">
+                Find out how much of your life has been affected by Israel
+              </p>
+            ) : (
+              <>
+                <p className="heading_text text-center text-[18px] font-semibold w-[320px]">
+                  Find out if the person has connections with:
+                </p>
+                <div className="flex gap-[20px] text-[18px] font-bold mt-[6px]">
+                  <p className="drop-shadow-[0_0px_10px_rgba(0,0,0,0.5)]">Israel</p>
+                  <p className="drop-shadow-[0_0px_10px_rgba(0,0,0,0.5)]">Zionists</p>
+                  <p className="drop-shadow-[0_0px_10px_rgba(0,0,0,0.5)]">Epstein</p>
+                </div>
+              </>
+            )}
+          </div>
 
           {error && (
             <div className="err_warn w-full mt-[20px] h-[70px] text-[#fff] px-[12px] py-[10px] border border-[#ff2d2d30]">
@@ -488,15 +621,19 @@ export default function Home() {
             </div>
           )}
 
-          {!aiResponse && !showLockedResult && (
-            <button
-              onClick={handleSubmit}
-              disabled={isLoading}
-              className="submit_button mt-[30px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? "Processing..." : "SUBMIT"}
-            </button>
-          )}
+          {activeTool === "noticing" && (
+            <>
+              <MainInputs countries={countries} setCountries={setCountries} />
+
+              {!aiResponse && !showLockedResult && (
+                <button
+                  onClick={handleSubmit}
+                  disabled={isLoading}
+                  className="submit_button mt-[30px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? "Processing..." : "SUBMIT"}
+                </button>
+              )}
 
           {showLockedResult && (
             <div className="w-full result-block mt-[16px]">
@@ -570,7 +707,7 @@ export default function Home() {
                     
                   </div>
                 </div>
-                  {!isPaidPlan(userPlan) && (
+                  {!FREE_MODE && !isPaidPlan(userPlan) && (
                     <button
                       type="button"
                       onClick={() => setShowBuy(true)}
@@ -675,6 +812,44 @@ export default function Home() {
               USE AGAIN
             </button>
           )}
+            </>
+          )}
+
+          {activeTool === "figures" && (
+            <>
+              <FigureInput personName={personName} setPersonName={setPersonName} />
+
+              {!figureResponse && (
+                <button
+                  onClick={handleFigureSubmit}
+                  disabled={figureLoading}
+                  className="submit_button mt-[30px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {figureLoading ? "Researching..." : "SUBMIT"}
+                </button>
+              )}
+
+              {figureResponse && (
+                <ShowResults
+                  aiResponse={figureResponse}
+                  isPaid={figureIsPaid}
+                  onUpgrade={() => setShowBuy(true)}
+                />
+              )}
+
+              {figureResponse && (
+                <button
+                  onClick={() => {
+                    setFigureResponse(null);
+                    setPersonName("");
+                  }}
+                  className="submit_button flex items-center justify-center mt-[30px] text-[#0f0f0f] text-[26px] font-bold w-full rounded-[14px] bg-white h-[50px]"
+                >
+                  USE AGAIN
+                </button>
+              )}
+            </>
+          )}
 
           {showAuth && (
             <SignUpForm
@@ -726,7 +901,7 @@ export default function Home() {
             />
           )}
           {showBuy && (
-            <BuyModal
+            <PlansModal
               user={user}
               onSelectPlan={(planKey) => {
                 setSelectedPlanKey(planKey);

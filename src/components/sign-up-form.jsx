@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
+import GoogleButton from "@/components/GoogleButton";
 import {
   isValidUsername,
   normalizeUsername,
@@ -210,6 +211,12 @@ export function SignUpForm({ className, ...props }) {
           {/* <CardDescription>Create a new account</CardDescription> */}
         </CardHeader>
         <CardContent>
+          <GoogleButton selectedPlanKey={props.selectedPlanKey} disabled={isLoading} />
+          <div className="my-4 flex items-center gap-3 text-[11px] text-[#999]">
+            <span className="h-px flex-1 bg-[#e5e5e5]" />
+            or
+            <span className="h-px flex-1 bg-[#e5e5e5]" />
+          </div>
           <form onSubmit={handleSignUp}>
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">

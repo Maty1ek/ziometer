@@ -1,7 +1,8 @@
 "use server";
 
 import { SYSTEM_PROMPT_PAID } from "@/lib/prompt-paid";
-import { isPaidPlan } from "@/lib/account";
+import { FREE_MODE } from "@/lib/free-mode";
+import { consumePaidUse } from "@/lib/usage";
 import { createClient } from "@/lib/supabase/server";
 
 function clampPercentage(value, fieldName, allowNull = false) {
@@ -117,8 +118,16 @@ export async function submitToGrok(countries) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!isPaidPlan(user?.user_metadata?.plan)) {
-    throw new Error("A paid plan is required to run this analysis.");
+  // Same entitlement gate as the Figure tool: paid plan required (burns a use
+  // on the 3-uses plan), unless FREE_MODE is on.
+  if (!FREE_MODE) {
+    if (!user?.id) {
+      throw new Error("A paid plan is required to run this analysis.");
+    }
+    const { allowed } = await consumePaidUse(user.id);
+    if (!allowed) {
+      throw new Error("A paid plan is required to run this analysis.");
+    }
   }
 
   const systemPrompt = SYSTEM_PROMPT_PAID;

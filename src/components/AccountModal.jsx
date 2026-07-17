@@ -3,7 +3,7 @@ import { getPlanDisplayName } from "@/lib/account";
 
 const AccountModal = ({onClose, logOut, user, onDelete}) => {
   const username = user?.user_metadata?.username || user?.email?.split("@")[0] || "User";
-  const planName = getPlanDisplayName(user?.user_metadata?.plan);
+  const planName = getPlanDisplayName(user?.app_metadata?.plan);
 
   return (
     <div className="flex flex-col gap-6 fixed inset-0 bg-[#c7c7c723] backdrop-blur-[3px] bg-opacity-80 items-center justify-center p-[20px] z-50">

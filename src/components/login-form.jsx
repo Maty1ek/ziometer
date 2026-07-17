@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useState } from 'react'
 import { X } from 'lucide-react'
+import GoogleButton from "@/components/GoogleButton";
 import { normalizeUsername, usernameToEmail } from "@/lib/account";
 
 export function LoginForm({
@@ -72,6 +73,12 @@ export function LoginForm({
           {/* <CardDescription>Enter your email below to login to your account</CardDescription> */}
         </CardHeader>
         <CardContent>
+          <GoogleButton selectedPlanKey={props.selectedPlanKey} disabled={isLoading} />
+          <div className="my-4 flex items-center gap-3 text-[11px] text-[#999]">
+            <span className="h-px flex-1 bg-[#e5e5e5]" />
+            or
+            <span className="h-px flex-1 bg-[#e5e5e5]" />
+          </div>
           <form onSubmit={handleLogin}>
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
