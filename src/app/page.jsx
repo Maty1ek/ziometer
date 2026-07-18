@@ -119,7 +119,7 @@ export default function Home() {
   const xLink = process.env.NEXT_PUBLIC_SOCIAL_X_LINK;
   const discordLink = process.env.NEXT_PUBLIC_SOCIAL_DISCORD_LINK;
 
-  const [activeTool, setActiveTool] = useState("noticing");
+  const [activeTool, setActiveTool] = useState("figures");
 
   const [countries, setCountries] = useState([{ country: "", years: "" }]);
   const [isLoading, setIsLoading] = useState(false);

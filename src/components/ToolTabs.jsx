@@ -5,8 +5,8 @@ import React from "react";
 // Segmented control that switches between the two AI tools under the shared
 // GREAT NOTICING heading. Styled as a glass pill to match the header buttons.
 const TOOLS = [
-  { key: "noticing", label: "Life Impact" },
   { key: "figures", label: "Public Figure" },
+  { key: "noticing", label: "Life Impact" },
 ];
 
 const ToolTabs = ({ activeTool, onChange }) => {
