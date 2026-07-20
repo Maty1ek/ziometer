@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { FREE_MODE } from "@/lib/free-mode";
 import { consumePaidUse } from "@/lib/usage";
-import { FIGURE_FREE_PROMPT } from "@/lib/prompts/figure-free";
-import { FIGURE_PAID_PROMPT } from "@/lib/prompts/figure-paid";
+import { FREE_PROMPT as FIGURE_FREE_PROMPT } from "@/lib/prompts/figure-free";
+import { PAID_PROMPT as FIGURE_PAID_PROMPT } from "@/lib/prompts/figure-paid";
 import { createXai } from "@ai-sdk/xai";
 import { generateText } from "ai";
 
