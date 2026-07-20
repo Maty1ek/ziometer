@@ -8,7 +8,7 @@ export const PLANS = {
   three_uses: {
     id: process.env.WHOP_THREE_USES_PRODUCT_ID,
     name: "3 Uses",
-    price: "$4.99",
+    price: "$3.99",
     period: "one-time",
     gnPlan: "three_uses",
     queryLimit: 3,
