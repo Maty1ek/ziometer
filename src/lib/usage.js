@@ -26,7 +26,7 @@ export async function consumePaidUse(userId) {
   // Unlimited plans: no counter to touch.
   if (!isLimitedPlan(plan)) return { allowed: true, plan, remaining: null };
 
-  // Limited plan (three_uses): check and decrement the counter.
+  // Limited plan (one_use / three_uses): check and decrement the counter.
   const remaining = Number.isInteger(meta.uses_remaining) ? meta.uses_remaining : 0;
   if (remaining <= 0) return { allowed: false, plan, remaining: 0 };
 

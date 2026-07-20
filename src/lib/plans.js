@@ -5,6 +5,15 @@
 // `gnPlan` is the value the Whop webhook writes to app_metadata.plan.
 // `queryLimit` (null = unlimited) seeds app_metadata.uses_remaining.
 export const PLANS = {
+  one_use: {
+    id: process.env.WHOP_ONE_USE_PRODUCT_ID,
+    name: "1 Use",
+    price: "$2.99",
+    period: "one-time",
+    gnPlan: "one_use",
+    queryLimit: 1,
+    desc: ["1 full unlock", "Both tools included", "Full breakdown & sources"],
+  },
   three_uses: {
     id: process.env.WHOP_THREE_USES_PRODUCT_ID,
     name: "3 Uses",
@@ -17,21 +26,12 @@ export const PLANS = {
   unlimited: {
     id: process.env.WHOP_UNLIMITED_PRODUCT_ID,
     name: "Unlimited",
-    price: "$8.99",
+    price: "$9.99",
     period: "one-time",
     best: true,
     default: true,
     gnPlan: "unlimited",
     queryLimit: null,
     desc: ["Everything in 3 Uses", "Unlimited uses, forever"],
-  },
-  unlimited_support: {
-    id: process.env.WHOP_UNLIMITED_SUPPORT_PRODUCT_ID,
-    name: "Unlimited + Support",
-    price: "$9.99",
-    period: "one-time",
-    gnPlan: "unlimited_support",
-    queryLimit: null,
-    desc: ["Everything in Unlimited", "Extra goes to support the project"],
   },
 };

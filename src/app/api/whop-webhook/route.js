@@ -2,6 +2,7 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { whopsdk } from "@/lib/whop";
 import { PLANS } from "@/lib/plans";
+import { isUnlimitedPlan } from "@/lib/account";
 
 export async function POST(request) {
   const requestBodyText = await request.text();
@@ -33,10 +34,33 @@ export async function POST(request) {
         }
 
         const currentAppMetadata = userData.user?.app_metadata ?? {};
+        const currentPlan = currentAppMetadata.plan ?? null;
 
-        // Seed the usage counter for the limited plan; unlimited plans get null
-        // (no counter). PLANS[key].queryLimit is 3 for three_uses, null otherwise.
-        const usesRemaining = PLANS[purchasedPlan]?.queryLimit ?? null;
+        // A purchase must never take entitlement away. Two rules:
+        //   1. Already unlimited → stay unlimited, whatever was just bought.
+        //      (Otherwise an unlimited holder who buys a pack is downgraded to it.)
+        //   2. Buying a pack while holding credits → ADD to the counter.
+        //      (A flat overwrite meant buying 3 uses with 2 left left you at 3.)
+        // PLANS[key].queryLimit is 1 for one_use, 3 for three_uses, null for unlimited.
+        const purchasedLimit = PLANS[purchasedPlan]?.queryLimit ?? null;
+
+        let nextPlan = purchasedPlan;
+        let nextUsesRemaining;
+
+        if (isUnlimitedPlan(currentPlan)) {
+          // Rule 1: keep the stronger plan; unlimited has no counter.
+          nextPlan = currentPlan;
+          nextUsesRemaining = null;
+        } else if (purchasedLimit === null) {
+          // Upgrading to unlimited: counter no longer applies.
+          nextUsesRemaining = null;
+        } else {
+          // Rule 2: top up whatever is left over.
+          const existing = Number.isInteger(currentAppMetadata.uses_remaining)
+            ? currentAppMetadata.uses_remaining
+            : 0;
+          nextUsesRemaining = Math.max(existing, 0) + purchasedLimit;
+        }
 
         // Entitlement is stored in app_metadata, which is writable ONLY through
         // the service-role admin API — never from the browser. This is what makes
@@ -45,8 +69,8 @@ export async function POST(request) {
           await supabaseAdmin.auth.admin.updateUserById(userId, {
             app_metadata: {
               ...currentAppMetadata,
-              plan: purchasedPlan,
-              uses_remaining: usesRemaining,
+              plan: nextPlan,
+              uses_remaining: nextUsesRemaining,
             },
           });
 

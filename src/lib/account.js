@@ -21,17 +21,25 @@ export function usernameToEmail(username = "") {
 // The single source of truth for entitlement is `app_metadata.plan`, set by the
 // Whop webhook via the service-role admin API (app_metadata is not writable from
 // the browser, so the plan can't be forged). Three one-time plans, no subs:
+//   one_use            — 1 unlock  (tracked in app_metadata.uses_remaining)
 //   three_uses         — 3 unlocks (tracked in app_metadata.uses_remaining)
 //   unlimited          — unlimited unlocks
-//   unlimited_support  — unlimited unlocks, buyer paid extra to support
+//
+// `unlimited_support` is retired and no longer sold, but users who bought it
+// keep their entitlement, so every check below still honours it.
 
 export function isPaidPlan(plan = "") {
-  return plan === "three_uses" || plan === "unlimited" || plan === "unlimited_support";
+  return (
+    plan === "one_use" ||
+    plan === "three_uses" ||
+    plan === "unlimited" ||
+    plan === "unlimited_support"
+  );
 }
 
 // A limited plan burns a per-use counter; unlimited plans don't.
 export function isLimitedPlan(plan = "") {
-  return plan === "three_uses";
+  return plan === "one_use" || plan === "three_uses";
 }
 
 export function isUnlimitedPlan(plan = "") {
@@ -44,6 +52,7 @@ export function hasFullBreakdownAccess(plan = "") {
 }
 
 export function getPlanDisplayName(plan = "") {
+  if (plan === "one_use") return "1 Use";
   if (plan === "three_uses") return "3 Uses";
   if (plan === "unlimited") return "Unlimited";
   if (plan === "unlimited_support") return "Supporter";
